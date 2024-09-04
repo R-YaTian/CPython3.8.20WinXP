@@ -967,7 +967,7 @@ conflict.
 
    .. versionadded:: 3.7
 
-   .. versionchanged:: 3.13
+   .. versionchanged:: 3.14
       Added ``PYTHONPROFILEIMPORTTIME=2`` to also trace imports of loaded modules.
 
 
