@@ -34,6 +34,8 @@ class _IterationGuard:
 
 
 class WeakSet:
+    __slots__ = ('__dict__', '__weakref__', 'data',
+                 '_remove', '_pending_removals', '_iterating')
     def __init__(self, data=None):
         self.data = set()
 
@@ -65,7 +67,11 @@ class WeakSet:
         return wr in self.data
 
     def __reduce__(self):
-        return self.__class__, (list(self),), self.__getstate__()
+        dict, slots = self.__getstate__()
+        for name in WeakSet.__slots__:
+            slots.pop(name, None)
+        state = (dict, slots) if slots else (dict or None)
+        return self.__class__, (list(self),), state
 
     def add(self, item):
         self.data.add(ref(item, self._remove))
