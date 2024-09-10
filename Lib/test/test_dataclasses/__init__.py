@@ -60,7 +60,7 @@ class TestCase(unittest.TestCase):
                 x: int = field(default=1, default_factory=int)
 
     def test_field_repr(self):
-        int_field = field(default=1, init=True, repr=False)
+        int_field = field(default=1, init=True, repr=False, doc='Docstring')
         int_field.name = "id"
         repr_output = repr(int_field)
         expected_output = "Field(name='id',type=None," \
@@ -68,6 +68,7 @@ class TestCase(unittest.TestCase):
                            "init=True,repr=False,hash=None," \
                            "compare=True,metadata=mappingproxy({})," \
                            f"kw_only={MISSING!r}," \
+                           "doc='Docstring'," \
                            "_field_type=None)"
 
         self.assertEqual(repr_output, expected_output)
@@ -3261,7 +3262,7 @@ class TestSlots(unittest.TestCase):
             j: str
             h: str
 
-        self.assertEqual(Base.__slots__, ('y', ))
+        self.assertEqual(Base.__slots__, {'y': None})
 
         @dataclass(slots=True)
         class Derived(Base):
@@ -3271,13 +3272,31 @@ class TestSlots(unittest.TestCase):
             k: str
             h: str
 
-        self.assertEqual(Derived.__slots__, ('z', ))
+        self.assertEqual(Derived.__slots__, {'z': None})
 
         @dataclass
         class AnotherDerived(Base):
             z: int
 
         self.assertNotIn('__slots__', AnotherDerived.__dict__)
+
+    def test_slots_with_docs(self):
+        class Root:
+            __slots__ = {'x': 'x'}
+
+        @dataclass(slots=True)
+        class Base(Root):
+            y1: int = field(doc='y1')
+            y2: int
+
+        self.assertEqual(Base.__slots__, {'y1': 'y1', 'y2': None})
+
+        @dataclass(slots=True)
+        class Child(Base):
+            z1: int = field(doc='z1')
+            z2: int
+
+        self.assertEqual(Child.__slots__, {'z1': 'z1', 'z2': None})
 
     def test_cant_inherit_from_iterator_slots(self):
 
@@ -3319,7 +3338,8 @@ class TestSlots(unittest.TestCase):
     def test_frozen_pickle(self):
         # bpo-43999
 
-        self.assertEqual(self.FrozenSlotsClass.__slots__, ("foo", "bar"))
+        self.assertEqual(self.FrozenSlotsClass.__slots__,
+                         {"foo": None, "bar": None})
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             with self.subTest(proto=proto):
                 obj = self.FrozenSlotsClass("a", 1)
@@ -3556,7 +3576,7 @@ class TestSlots(unittest.TestCase):
         class B(A):
             pass
 
-        self.assertEqual(B.__slots__, ())
+        self.assertEqual(B.__slots__, {})
         B()
 
     def test_dataclass_derived_generic(self):
@@ -3565,14 +3585,14 @@ class TestSlots(unittest.TestCase):
         @dataclass(slots=True, weakref_slot=True)
         class A(typing.Generic[T]):
             pass
-        self.assertEqual(A.__slots__, ('__weakref__',))
+        self.assertEqual(A.__slots__, {'__weakref__': None})
         self.assertTrue(A.__weakref__)
         A()
 
         @dataclass(slots=True, weakref_slot=True)
         class B[T2]:
             pass
-        self.assertEqual(B.__slots__, ('__weakref__',))
+        self.assertEqual(B.__slots__, {'__weakref__': None})
         self.assertTrue(B.__weakref__)
         B()
 
@@ -3584,20 +3604,20 @@ class TestSlots(unittest.TestCase):
         @dataclass(slots=True, weakref_slot=True)
         class C1(typing.Generic[T], RawBase):
             pass
-        self.assertEqual(C1.__slots__, ())
+        self.assertEqual(C1.__slots__, {})
         self.assertTrue(C1.__weakref__)
         C1()
         @dataclass(slots=True, weakref_slot=True)
         class C2(RawBase, typing.Generic[T]):
             pass
-        self.assertEqual(C2.__slots__, ())
+        self.assertEqual(C2.__slots__, {})
         self.assertTrue(C2.__weakref__)
         C2()
 
         @dataclass(slots=True, weakref_slot=True)
         class D[T2](RawBase):
             pass
-        self.assertEqual(D.__slots__, ())
+        self.assertEqual(D.__slots__, {})
         self.assertTrue(D.__weakref__)
         D()
 
@@ -3610,20 +3630,20 @@ class TestSlots(unittest.TestCase):
         @dataclass(slots=True, weakref_slot=True)
         class E1(WithSlots, Generic[T]):
             pass
-        self.assertEqual(E1.__slots__, ('__weakref__',))
+        self.assertEqual(E1.__slots__, {'__weakref__': None})
         self.assertTrue(E1.__weakref__)
         E1()
         @dataclass(slots=True, weakref_slot=True)
         class E2(Generic[T], WithSlots):
             pass
-        self.assertEqual(E2.__slots__, ('__weakref__',))
+        self.assertEqual(E2.__slots__, {'__weakref__': None})
         self.assertTrue(E2.__weakref__)
         E2()
 
         @dataclass(slots=True, weakref_slot=True)
         class F[T2](WithSlots):
             pass
-        self.assertEqual(F.__slots__, ('__weakref__',))
+        self.assertEqual(F.__slots__, {'__weakref__': None})
         self.assertTrue(F.__weakref__)
         F()
 
@@ -3636,20 +3656,20 @@ class TestSlots(unittest.TestCase):
         @dataclass(slots=True, weakref_slot=True)
         class G1(WithWeakrefSlot, Generic[T]):
             pass
-        self.assertEqual(G1.__slots__, ())
+        self.assertEqual(G1.__slots__, {})
         self.assertTrue(G1.__weakref__)
         G1()
         @dataclass(slots=True, weakref_slot=True)
         class G2(Generic[T], WithWeakrefSlot):
             pass
-        self.assertEqual(G2.__slots__, ())
+        self.assertEqual(G2.__slots__, {})
         self.assertTrue(G2.__weakref__)
         G2()
 
         @dataclass(slots=True, weakref_slot=True)
         class H[T2](WithWeakrefSlot):
             pass
-        self.assertEqual(H.__slots__, ())
+        self.assertEqual(H.__slots__, {})
         self.assertTrue(H.__weakref__)
         H()
 
@@ -3660,7 +3680,7 @@ class TestSlots(unittest.TestCase):
         @dataclass(slots=True)
         class A(WithDictSlot): ...
 
-        self.assertEqual(A.__slots__, ())
+        self.assertEqual(A.__slots__, {})
         self.assertEqual(A().__dict__, {})
         A()
 
