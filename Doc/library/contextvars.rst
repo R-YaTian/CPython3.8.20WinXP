@@ -158,33 +158,53 @@ Manual Context Management
       or propagate an exception if one occurred.
 
       Any changes to any context variables that *callable* makes will
-      be contained in the context object::
+      be contained in the context object.
 
-        var = ContextVar('var')
-        var.set('spam')
+      Example:
 
-        def main():
-            # 'var' was set to 'spam' before
-            # calling 'copy_context()' and 'ctx.run(main)', so:
-            # var.get() == ctx[var] == 'spam'
+      .. testcode::
 
-            var.set('ham')
+         import contextvars
 
-            # Now, after setting 'var' to 'ham':
-            # var.get() == ctx[var] == 'ham'
+         var = contextvars.ContextVar('var')
+         var.set('spam')
+         print(var.get())  # 'spam'
 
-        ctx = copy_context()
+         ctx = contextvars.copy_context()
 
-        # Any changes that the 'main' function makes to 'var'
-        # will be contained in 'ctx'.
-        ctx.run(main)
+         def main():
+             # 'var' was set to 'spam' before
+             # calling 'copy_context()' and 'ctx.run(main)', so:
+             print(var.get())  # 'spam'
+             print(ctx[var])  # 'spam'
 
-        # The 'main()' function was run in the 'ctx' context,
-        # so changes to 'var' are contained in it:
-        # ctx[var] == 'ham'
+             var.set('ham')
 
-        # However, outside of 'ctx', 'var' is still set to 'spam':
-        # var.get() == 'spam'
+             # Now, after setting 'var' to 'ham':
+             print(var.get())  # 'ham'
+             print(ctx[var])  # 'ham'
+
+         # Any changes that the 'main' function makes to 'var'
+         # will be contained in 'ctx'.
+         ctx.run(main)
+
+         # The 'main()' function was run in the 'ctx' context,
+         # so changes to 'var' are contained in it:
+         print(ctx[var])  # 'ham'
+
+         # However, outside of 'ctx', 'var' is still set to 'spam':
+         print(var.get())  # 'spam'
+
+      .. testoutput::
+         :hide:
+
+         spam
+         spam
+         spam
+         ham
+         ham
+         ham
+         spam
 
       The method raises a :exc:`RuntimeError` when called on the same
       context object from more than one OS thread, or when called
