@@ -988,7 +988,9 @@ dummy_func(
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
                     frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
-            if (err) ERROR_NO_POP();
+            if (err) {
+                ERROR_NO_POP();
+            }
         }
 
         macro(INSTRUMENTED_RETURN_VALUE) =
@@ -1184,7 +1186,9 @@ dummy_func(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
                     frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
             LOAD_SP();
-            if (err) ERROR_NO_POP();
+            if (err) {
+                ERROR_NO_POP();
+            }
             if (frame->instr_ptr != this_instr) {
                 next_instr = frame->instr_ptr;
                 DISPATCH();
@@ -1292,10 +1296,12 @@ dummy_func(
                 DECREF_INPUTS();
                 ERROR_IF(true, error);
             }
-            if (PyDict_CheckExact(ns))
+            if (PyDict_CheckExact(ns)) {
                 err = PyDict_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
-            else
+            }
+            else {
                 err = PyObject_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            }
             DECREF_INPUTS();
             ERROR_IF(err, error);
         }
@@ -2009,6 +2015,8 @@ dummy_func(
                 attr_o = PyObject_GetAttr(PyStackRef_AsPyObjectBorrow(owner), name);
                 DECREF_INPUTS();
                 ERROR_IF(attr_o == NULL, error);
+                /* We need to define self_or_null on all paths */
+                self_or_null = PyStackRef_NULL;
             }
             attr = PyStackRef_FromPyObjectSteal(attr_o);
         }
@@ -3222,10 +3230,10 @@ dummy_func(
         op(_MAYBE_EXPAND_METHOD, (callable, self_or_null, args[oparg] -- func, maybe_self, args[oparg])) {
             if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
                 PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
-                PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                maybe_self = PyStackRef_FromPyObjectNew(self);
                 PyObject *method = ((PyMethodObject *)callable_o)->im_func;
                 func = PyStackRef_FromPyObjectNew(method);
+                PyObject *self = ((PyMethodObject *)callable_o)->im_self;
+                maybe_self = PyStackRef_FromPyObjectNew(self);
                 /* Make sure that callable and all args are in memory */
                 args[-2] = func;
                 args[-1] = maybe_self;
@@ -4313,7 +4321,9 @@ dummy_func(
                 int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
                     frame, this_instr, func, arg);
-                if (err) ERROR_NO_POP();
+                if (err) {
+                    ERROR_NO_POP();
+                }
                 result = PyStackRef_FromPyObjectSteal(PyObject_Call(func, callargs, kwargs));
 
                 if (!PyFunction_Check(func) && !PyMethod_Check(func)) {

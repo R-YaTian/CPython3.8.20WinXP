@@ -1,13 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import lexer
 import parser
 import re
 from typing import Optional
 
-
 @dataclass
 class Properties:
-    escapes: bool
+    escaping_calls: dict[lexer.Token, lexer.Token]
     error_with_pop: bool
     error_without_pop: bool
     deopts: bool
@@ -35,8 +34,11 @@ class Properties:
 
     @staticmethod
     def from_list(properties: list["Properties"]) -> "Properties":
+        escaping_calls: dict[lexer.Token, lexer.Token] = {}
+        for p in properties:
+            escaping_calls.update(p.escaping_calls)
         return Properties(
-            escapes=any(p.escapes for p in properties),
+            escaping_calls=escaping_calls,
             error_with_pop=any(p.error_with_pop for p in properties),
             error_without_pop=any(p.error_without_pop for p in properties),
             deopts=any(p.deopts for p in properties),
@@ -59,9 +61,12 @@ class Properties:
     def infallible(self) -> bool:
         return not self.error_with_pop and not self.error_without_pop
 
+    @property
+    def escapes(self) -> bool:
+        return bool(self.escaping_calls)
 
 SKIP_PROPERTIES = Properties(
-    escapes=False,
+    escaping_calls=[],
     error_with_pop=False,
     error_without_pop=False,
     deopts=False,
@@ -156,6 +161,7 @@ class Uop:
     stack: StackEffect
     caches: list[CacheEntry]
     deferred_refs: dict[lexer.Token, str | None]
+    output_stores: list[lexer.Token]
     body: list[lexer.Token]
     properties: Properties
     _size: int = -1
@@ -353,17 +359,39 @@ def analyze_caches(inputs: list[parser.InputEffect]) -> list[CacheEntry]:
     return [CacheEntry(i.name, int(i.size)) for i in caches]
 
 
+def find_assignment_target(node: parser.InstDef, idx: int) -> list[lexer.Token]:
+    """Find the tokens that make up the left-hand side of an assignment"""
+    offset = 0
+    for tkn in reversed(node.block.tokens[: idx]):
+        if tkn.kind == "SEMI" or tkn.kind == "LBRACE" or tkn.kind == "RBRACE":
+            return node.block.tokens[idx - offset : idx]
+        offset += 1
+    return []
+
+
+def find_stores_outputs(node: parser.InstDef) -> list[lexer.Token]:
+    res: list[lexer.Token] = []
+    outnames = [ out.name for out in node.outputs ]
+    for idx, tkn in enumerate(node.block.tokens):
+        if tkn.kind == "AND":
+            name = node.block.tokens[idx+1]
+            if name.text in outnames:
+                res.append(name)
+        if tkn.kind != "EQUALS":
+            continue
+        lhs = find_assignment_target(node, idx)
+        assert lhs
+        while lhs and lhs[0].kind == "COMMENT":
+            lhs = lhs[1:]
+        if len(lhs) != 1 or lhs[0].kind != "IDENTIFIER":
+            continue
+        name = lhs[0]
+        if name.text in outnames:
+            res.append(name)
+    return res
+
 def analyze_deferred_refs(node: parser.InstDef) -> dict[lexer.Token, str | None]:
     """Look for PyStackRef_FromPyObjectNew() calls"""
-
-    def find_assignment_target(idx: int) -> list[lexer.Token]:
-        """Find the tokens that make up the left-hand side of an assignment"""
-        offset = 1
-        for tkn in reversed(node.block.tokens[: idx - 1]):
-            if tkn.kind == "SEMI" or tkn.kind == "LBRACE" or tkn.kind == "RBRACE":
-                return node.block.tokens[idx - offset : idx - 1]
-            offset += 1
-        return []
 
     refs: dict[lexer.Token, str | None] = {}
     for idx, tkn in enumerate(node.block.tokens):
@@ -373,7 +401,7 @@ def analyze_deferred_refs(node: parser.InstDef) -> dict[lexer.Token, str | None]
         if idx == 0 or node.block.tokens[idx - 1].kind != "EQUALS":
             raise analysis_error("Expected '=' before PyStackRef_FromPyObjectNew", tkn)
 
-        lhs = find_assignment_target(idx)
+        lhs = find_assignment_target(node, idx - 1)
         if len(lhs) == 0:
             raise analysis_error(
                 "PyStackRef_FromPyObjectNew() must be assigned to an output", tkn
@@ -527,33 +555,32 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyList_FromStackRefSteal",
     "_PyTuple_FromArraySteal",
     "_PyTuple_FromStackRefSteal",
-)
-
-ESCAPING_FUNCTIONS = (
-    "import_name",
-    "import_from",
+    "PyFunction_GET_CODE",
+    "_PyErr_Occurred",
 )
 
 
-def makes_escaping_api_call(instr: parser.InstDef) -> bool:
-    if "CALL_INTRINSIC" in instr.name:
-        return True
-    if instr.name == "_BINARY_OP":
-        return True
-    tkns = iter(instr.tokens)
-    for tkn in tkns:
+def find_start_stmt(node: parser.InstDef, idx: int) -> lexer.Token:
+    assert idx < len(node.block.tokens)
+    while True:
+        tkn = node.block.tokens[idx-1]
+        if tkn.kind == "SEMI" or tkn.kind == "LBRACE" or tkn.kind == "RBRACE":
+            return node.block.tokens[idx]
+        idx -= 1
+        assert idx > 0
+
+def find_escaping_api_calls(instr: parser.InstDef) -> dict[lexer.Token, lexer.Token]:
+    result: dict[lexer.Token, lexer.Token] = {}
+    tokens = instr.block.tokens
+    for idx, tkn in enumerate(tokens):
         if tkn.kind != lexer.IDENTIFIER:
             continue
         try:
-            next_tkn = next(tkns)
-        except StopIteration:
-            return False
+            next_tkn = tokens[idx+1]
+        except IndexError:
+            return result
         if next_tkn.kind != lexer.LPAREN:
             continue
-        if tkn.text in ESCAPING_FUNCTIONS:
-            return True
-        if tkn.text == "tp_vectorcall":
-            return True
         if not tkn.text.startswith("Py") and not tkn.text.startswith("_Py"):
             continue
         if tkn.text.endswith("Check"):
@@ -564,8 +591,9 @@ def makes_escaping_api_call(instr: parser.InstDef) -> bool:
             continue
         if tkn.text in NON_ESCAPING_FUNCTIONS:
             continue
-        return True
-    return False
+        start = find_start_stmt(instr, idx)
+        result[start] = tkn
+    return result
 
 
 EXITS = {
@@ -637,6 +665,7 @@ def effect_depends_on_oparg_1(op: parser.InstDef) -> bool:
 
 
 def compute_properties(op: parser.InstDef) -> Properties:
+    escaping_calls = find_escaping_api_calls(op)
     has_free = (
         variable_used(op, "PyCell_New")
         or variable_used(op, "PyCell_GetRef")
@@ -657,7 +686,7 @@ def compute_properties(op: parser.InstDef) -> Properties:
     error_with_pop = has_error_with_pop(op)
     error_without_pop = has_error_without_pop(op)
     return Properties(
-        escapes=makes_escaping_api_call(op),
+        escaping_calls=escaping_calls,
         error_with_pop=error_with_pop,
         error_without_pop=error_without_pop,
         deopts=deopts_if,
@@ -692,6 +721,7 @@ def make_uop(
         stack=analyze_stack(op),
         caches=analyze_caches(inputs),
         deferred_refs=analyze_deferred_refs(op),
+        output_stores=find_stores_outputs(op),
         body=op.block.tokens,
         properties=compute_properties(op),
     )
@@ -712,6 +742,7 @@ def make_uop(
                 stack=analyze_stack(op, bit),
                 caches=analyze_caches(inputs),
                 deferred_refs=analyze_deferred_refs(op),
+                output_stores=find_stores_outputs(op),
                 body=op.block.tokens,
                 properties=properties,
             )
@@ -735,6 +766,7 @@ def make_uop(
             stack=analyze_stack(op),
             caches=analyze_caches(inputs),
             deferred_refs=analyze_deferred_refs(op),
+            output_stores=find_stores_outputs(op),
             body=op.block.tokens,
             properties=properties,
         )

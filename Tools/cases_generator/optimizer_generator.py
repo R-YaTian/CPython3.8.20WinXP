@@ -18,11 +18,12 @@ from generators_common import (
     ROOT,
     write_header,
     Emitter,
+    TokenIterator,
 )
 from cwriter import CWriter
 from typing import TextIO, Iterator
 from lexer import Token
-from stack import Local, Stack, StackError
+from stack import Local, Stack, StackError, Storage
 
 DEFAULT_OUTPUT = ROOT / "Python/optimizer_cases.c.h"
 DEFAULT_ABSTRACT_INPUT = (ROOT / "Python/optimizer_bytecodes.c").absolute().as_posix()
@@ -65,7 +66,7 @@ def declare_variables(uop: Uop, out: CWriter, skip_inputs: bool) -> None:
 def decref_inputs(
     out: CWriter,
     tkn: Token,
-    tkn_iter: Iterator[Token],
+    tkn_iter: TokenIterator,
     uop: Uop,
     stack: Stack,
     inst: Instruction | None,
@@ -102,21 +103,28 @@ def write_uop(
     skip_inputs: bool,
 ) -> None:
     locals: dict[str, Local] = {}
+    prototype = override if override else uop
     try:
-        prototype = override if override else uop
-        is_override = override is not None
         out.start_line()
+        peeks: list[Local] = []
         for var in reversed(prototype.stack.inputs):
             code, local = stack.pop(var, extract_bits=True)
             if not skip_inputs:
                 out.emit(code)
+            if var.peek:
+                peeks.append(local)
             if local.defined:
                 locals[local.name] = local
+        # Push back the peeks, so that they remain on the logical
+        # stack, but their values are cached.
+        while peeks:
+            stack.push(peeks.pop())
         out.emit(stack.define_output_arrays(prototype.stack.outputs))
+        storage = Storage.for_uop(stack, prototype, locals)
         if debug:
             args = []
             for var in prototype.stack.inputs:
-                if not var.peek or is_override:
+                if not var.peek or override:
                     args.append(var.name)
             out.emit(f'DEBUG_PRINTF({", ".join(args)});\n')
         if override:
@@ -130,20 +138,16 @@ def write_uop(
                     out.emit(f"{type}{cache.name} = ({cast})this_instr->operand;\n")
         if override:
             emitter = OptimizerEmitter(out)
-            emitter.emit_tokens(override, stack, None)
+            emitter.emit_tokens(override, storage, None)
         else:
             emit_default(out, uop)
 
-        for var in prototype.stack.outputs:
-            if var.name in locals:
-                local = locals[var.name]
-            else:
-                local = Local.local(var)
-            stack.push(local)
+        for output in storage.outputs:
+            stack.push(output)
         out.start_line()
         stack.flush(out, cast_type="_Py_UopsSymbol *", extract_bits=True)
     except StackError as ex:
-        raise analysis_error(ex.args[0], uop.body[0])
+        raise analysis_error(ex.args[0], prototype.body[0])
 
 
 SKIPS = ("_EXTENDED_ARG",)

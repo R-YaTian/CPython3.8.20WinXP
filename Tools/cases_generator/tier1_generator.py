@@ -22,10 +22,11 @@ from generators_common import (
     write_header,
     type_and_null,
     Emitter,
+    TokenIterator,
 )
 from cwriter import CWriter
 from typing import TextIO
-from stack import Local, Stack, StackError, get_stack_effect
+from stack import Local, Stack, StackError, get_stack_effect, Storage
 
 
 DEFAULT_OUTPUT = ROOT / "Python/generated_cases.c.h"
@@ -47,7 +48,7 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
     try:
         stack = get_stack_effect(inst)
     except StackError as ex:
-        raise analysis_error(ex.args[0], inst.where)
+        raise analysis_error(ex.args[0], inst.where) from None
     required = set(stack.defined)
     required.discard("unused")
     for part in inst.parts:
@@ -99,17 +100,8 @@ def write_uop(
             stack.push(peeks.pop())
         if braces:
             emitter.emit("{\n")
-        emitter.out.emit(stack.define_output_arrays(uop.stack.outputs))
-        outputs: list[Local] = []
-        for var in uop.stack.outputs:
-            if not var.peek:
-                if var.name in locals:
-                    local = locals[var.name]
-                elif var.name == "unused":
-                    local = Local.unused(var)
-                else:
-                    local = Local.local(var)
-                outputs.append(local)
+        emitter.emit(stack.define_output_arrays(uop.stack.outputs))
+        storage = Storage.for_uop(stack, uop, locals)
 
         for cache in uop.caches:
             if cache.name != "unused":
@@ -125,12 +117,8 @@ def write_uop(
                 if inst.family is None:
                     emitter.emit(f"(void){cache.name};\n")
             offset += cache.size
-        emitter.emit_tokens(uop, stack, inst)
-        for output in outputs:
-            if output.name in uop.deferred_refs.values():
-                # We've already spilled this when emitting tokens
-                output.cached = False
-            stack.push(output)
+
+        emitter.emit_tokens(uop, storage, inst)
         if braces:
             emitter.out.start_line()
             emitter.emit("}\n")

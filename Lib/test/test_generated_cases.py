@@ -60,7 +60,7 @@ class TestEffects(unittest.TestCase):
         stack.pop(y)
         stack.pop(x)
         for out in outputs:
-            stack.push(Local.local(out))
+            stack.push(Local.undefined(out))
         self.assertEqual(stack.base_offset.to_c(), "-1 - oparg - oparg*2")
         self.assertEqual(stack.top_offset.to_c(), "1 - oparg - oparg*2 + oparg*4")
 
@@ -280,6 +280,67 @@ class TestGeneratedCases(unittest.TestCase):
         }
     """
         self.run_cases_test(input, output)
+
+    def test_sync_sp(self):
+        input = """
+        inst(A, (arg -- res)) {
+            SYNC_SP();
+            escaping_call();
+            res = Py_None;
+        }
+        inst(B, (arg -- res)) {
+            res = Py_None;
+            SYNC_SP();
+            escaping_call();
+        }
+    """
+        output = """
+        TARGET(A) {
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(A);
+            _PyStackRef res;
+            stack_pointer += -1;
+            assert(WITHIN_STACK_BOUNDS());
+            escaping_call();
+            res = Py_None;
+            stack_pointer[0] = res;
+            stack_pointer += 1;
+            assert(WITHIN_STACK_BOUNDS());
+            DISPATCH();
+        }
+
+        TARGET(B) {
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(B);
+            _PyStackRef res;
+            res = Py_None;
+            stack_pointer += -1;
+            assert(WITHIN_STACK_BOUNDS());
+            escaping_call();
+            stack_pointer[0] = res;
+            stack_pointer += 1;
+            assert(WITHIN_STACK_BOUNDS());
+            DISPATCH();
+        }
+    """
+        self.run_cases_test(input, output)
+
+
+    def test_pep7_condition(self):
+        input = """
+        inst(OP, (arg1 -- out)) {
+            if (arg1)
+                out = 0;
+            else {
+                out = 1;
+            }
+        }
+        """
+        output = ""
+        with self.assertRaises(SyntaxError):
+            self.run_cases_test(input, output)
 
     def test_error_if_plain(self):
         input = """
@@ -810,7 +871,7 @@ class TestGeneratedCases(unittest.TestCase):
         }
         """
         output = ""
-        with self.assertRaises(Exception):
+        with self.assertRaises(SyntaxError):
             self.run_cases_test(input, output)
 
     def test_array_of_one(self):
@@ -1000,8 +1061,6 @@ class TestGeneratedCases(unittest.TestCase):
             stack_pointer += 2;
             assert(WITHIN_STACK_BOUNDS());
             // SECOND
-            b = stack_pointer[-1];
-            a = stack_pointer[-2];
             {
                 use(a, b);
             }
@@ -1096,7 +1155,8 @@ class TestGeneratedCases(unittest.TestCase):
                 b = 1;
                 if (cond) {
                     stack_pointer[0] = a;
-                    stack_pointer += 1;
+                    stack_pointer[1] = b;
+                    stack_pointer += 2;
                     assert(WITHIN_STACK_BOUNDS());
                     goto error;
                 }
