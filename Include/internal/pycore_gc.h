@@ -130,11 +130,7 @@ static inline int _PyObject_GC_IS_SHARED_INLINE(PyObject *op) {
 #define _PyObject_GC_IS_SHARED_INLINE(op) \
     _PyObject_GC_IS_SHARED_INLINE(_Py_CAST(PyObject*, op))
 
-static inline void _PyObject_GC_SET_SHARED_INLINE(PyObject *op) {
-    _PyObject_SET_GC_BITS(op, _PyGC_BITS_SHARED_INLINE);
-}
-#define _PyObject_GC_SET_SHARED_INLINE(op) \
-    _PyObject_GC_SET_SHARED_INLINE(_Py_CAST(PyObject*, op))
+extern void _PyObject_GC_SET_SHARED_INLINE(PyObject *op);
 
 #endif
 

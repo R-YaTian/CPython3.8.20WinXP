@@ -107,7 +107,11 @@ merge_queued_objects(_PyObjectStack *to_merge)
         // Subtract one when merging because the queue had a reference.
         Py_ssize_t refcount = _Py_ExplicitMergeRefcount(ob, -1);
         if (refcount == 0) {
-            _Py_Dealloc(ob);
+            if (!_PyObject_GC_IS_SHARED_INLINE(ob)) {
+                _Py_Dealloc(ob);
+            } else {
+                _PyObject_FreeDeferred(ob);
+            }
         }
     }
 }

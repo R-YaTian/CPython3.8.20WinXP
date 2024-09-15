@@ -274,6 +274,10 @@ PyAPI_FUNC(void) _Py_DecRefSharedDebug(PyObject *, const char *, int);
 // zero. Otherwise, the thread gives up ownership and merges the reference
 // count fields.
 PyAPI_FUNC(void) _Py_MergeZeroLocalRefcount(PyObject *);
+
+// Queue an object to be deferred at the next quiescent state
+PyAPI_FUNC(void) _PyObject_FreeDeferred(PyObject *o);
+
 #endif
 
 #if defined(Py_LIMITED_API) && (Py_LIMITED_API+0 >= 0x030c0000 || defined(Py_REF_DEBUG))

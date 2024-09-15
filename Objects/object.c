@@ -320,6 +320,27 @@ is_dead(PyObject *o)
 # endif
 
 void
+_PyObject_FreeDeferred(PyObject *o)
+{
+    // It's possible that before we've hit the quiescent-state that it
+    // has been incref'd and then decref'd back to zero again. We re-use
+    // the finalized bit to track if we've already queued the delay freed
+    // for this object as we no longer need to GC track it if it's being
+    // freed by QSBR as it's reclaimed by the ref count.
+    if (!_PyGC_FINALIZED(o)) {
+        Py_BEGIN_CRITICAL_SECTION(o);
+        if (!_PyGC_FINALIZED(o)) {
+            if (_PyObject_GC_IS_TRACKED(o)) {
+                PyObject_GC_UnTrack(o);
+            }
+            _PyGC_SET_FINALIZED(o);
+            _PyObject_FreeDelayed(o);
+        }
+        Py_END_CRITICAL_SECTION();
+    }
+}
+
+void
 _Py_DecRefSharedDebug(PyObject *o, const char *filename, int lineno)
 {
     // Should we queue the object for the owning thread to merge?
@@ -360,8 +381,12 @@ _Py_DecRefSharedDebug(PyObject *o, const char *filename, int lineno)
         _Py_brc_queue_object(o);
     }
     else if (new_shared == _Py_REF_MERGED) {
-        // refcount is zero AND merged
-        _Py_Dealloc(o);
+        if (!_PyObject_GC_IS_SHARED_INLINE(o)) {
+            // refcount is zero AND merged
+            _Py_Dealloc(o);
+        } else {
+            _PyObject_FreeDeferred(o);
+        }
     }
 }
 
@@ -379,7 +404,12 @@ _Py_MergeZeroLocalRefcount(PyObject *op)
     Py_ssize_t shared = _Py_atomic_load_ssize_acquire(&op->ob_ref_shared);
     if (shared == 0) {
         // Fast-path: shared refcount is zero (including flags)
-        _Py_Dealloc(op);
+        if (!_PyObject_GC_IS_SHARED_INLINE(op)) {
+            // refcount is zero AND merged
+            _Py_Dealloc(op);
+        } else {
+            _PyObject_FreeDeferred(op);
+        }
         return;
     }
 
@@ -398,7 +428,12 @@ _Py_MergeZeroLocalRefcount(PyObject *op)
     if (new_shared == _Py_REF_MERGED) {
         // i.e., the shared refcount is zero (only the flags are set) so we
         // deallocate the object.
-        _Py_Dealloc(op);
+        if (!_PyObject_GC_IS_SHARED_INLINE(op)) {
+            // refcount is zero AND merged
+            _Py_Dealloc(op);
+        } else {
+            _PyObject_FreeDeferred(op);
+        }
     }
 }
 

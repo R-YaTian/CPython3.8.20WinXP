@@ -1096,7 +1096,7 @@ static void
 free_work_item(uintptr_t ptr)
 {
     if (ptr & 0x01) {
-        PyObject_Free((char *)(ptr - 1));
+        _Py_Dealloc((PyObject*)(char *)(ptr - 1));
     }
     else {
         PyMem_Free((void *)ptr);

@@ -920,6 +920,11 @@ delete_garbage(struct collection_state *state)
             }
         }
         else {
+            // We can clear the inline shared of anything that's being freed
+            // as cyclic junk as the world is stopped and no one has a
+            // borrowed reference to it and we'll avoid pushing it to be
+            // delay freed.
+            _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_SHARED_INLINE);
             inquiry clear = Py_TYPE(op)->tp_clear;
             if (clear != NULL) {
                 (void) clear(op);
@@ -1917,13 +1922,7 @@ PyObject_GC_Del(void *op)
     }
 
     record_deallocation(_PyThreadState_GET());
-    PyObject *self = (PyObject *)op;
-    if (_PyObject_GC_IS_SHARED_INLINE(self)) {
-        _PyObject_FreeDelayed(((char *)op)-presize);
-    }
-    else {
-        PyObject_Free(((char *)op)-presize);
-    }
+    PyObject_Free(((char *)op)-presize);
 }
 
 int
@@ -1992,6 +1991,10 @@ _PyGC_ClearAllFreeLists(PyInterpreterState *interp)
         tstate = (_PyThreadStateImpl *)tstate->base.next;
     }
     HEAD_UNLOCK(&_PyRuntime);
+}
+
+void _PyObject_GC_SET_SHARED_INLINE(PyObject *op) {
+    _PyObject_SET_GC_BITS(op, _PyGC_BITS_SHARED_INLINE);
 }
 
 #endif  // Py_GIL_DISABLED
