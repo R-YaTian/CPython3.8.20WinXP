@@ -52,7 +52,7 @@ SRE(at)(SRE_STATE* state, const SRE_CHAR* ptr, SRE_CODE at)
 
     case SRE_AT_NON_BOUNDARY:
         if (state->beginning == state->end)
-            return 0;
+            return 1;
         thatp = ((void*) ptr > state->beginning) ?
             SRE_IS_WORD((int) ptr[-1]) : 0;
         thisp = ((void*) ptr < state->end) ?
@@ -70,7 +70,7 @@ SRE(at)(SRE_STATE* state, const SRE_CHAR* ptr, SRE_CODE at)
 
     case SRE_AT_LOC_NON_BOUNDARY:
         if (state->beginning == state->end)
-            return 0;
+            return 1;
         thatp = ((void*) ptr > state->beginning) ?
             SRE_LOC_IS_WORD((int) ptr[-1]) : 0;
         thisp = ((void*) ptr < state->end) ?
@@ -88,7 +88,7 @@ SRE(at)(SRE_STATE* state, const SRE_CHAR* ptr, SRE_CODE at)
 
     case SRE_AT_UNI_NON_BOUNDARY:
         if (state->beginning == state->end)
-            return 0;
+            return 1;
         thatp = ((void*) ptr > state->beginning) ?
             SRE_UNI_IS_WORD((int) ptr[-1]) : 0;
         thisp = ((void*) ptr < state->end) ?
