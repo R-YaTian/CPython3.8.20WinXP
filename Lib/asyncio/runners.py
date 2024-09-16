@@ -3,6 +3,7 @@ __all__ = ('Runner', 'run')
 import contextvars
 import enum
 import functools
+import inspect
 import threading
 import signal
 from . import coroutines
@@ -84,9 +85,14 @@ class Runner:
         return self._loop
 
     def run(self, coro, *, context=None):
-        """Run a coroutine inside the embedded event loop."""
-        if not coroutines.iscoroutine(coro):
-            raise ValueError("a coroutine was expected, got {!r}".format(coro))
+        """Run code in the embedded event loop.
+
+        The argument can be any awaitable object.
+
+        If the argument is a coroutine, it is wrapped in a Task.
+
+        Return the awaitable's result or raise an exception.
+        """
 
         if events._get_running_loop() is not None:
             # fail fast with short traceback
@@ -95,8 +101,19 @@ class Runner:
 
         self._lazy_init()
 
+        if not coroutines.iscoroutine(coro):
+            if inspect.isawaitable(coro):
+                async def _wrap_awaitable(awaitable):
+                    return await awaitable
+
+                coro = _wrap_awaitable(coro)
+            else:
+                raise TypeError('An asyncio.Future, a coroutine or an '
+                                'awaitable is required')
+
         if context is None:
             context = self._context
+
         task = self._loop.create_task(coro, context=context)
 
         if (threading.current_thread() is threading.main_thread()
