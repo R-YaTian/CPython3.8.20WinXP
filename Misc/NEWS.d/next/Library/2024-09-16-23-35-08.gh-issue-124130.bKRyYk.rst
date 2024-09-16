@@ -1,0 +1,4 @@
+The category "\B" in re currently does not match empty strings, which is
+against the general expectation. This patch fixes the problem, affecting
+sre operation "SRE_AT_NON_BOUNDARY", "SRE_AT_LOC_NON_BOUNDARY" and
+"SRE_AT_UNI_NON_BOUNDARY".
