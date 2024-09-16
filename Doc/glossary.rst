@@ -243,10 +243,14 @@ Glossary
       advanced mathematical feature.  If you're not aware of a need for them,
       it's almost certain you can safely ignore them.
 
+   context management protocol
+      The :meth:`~object.__enter__` and :meth:`~object.__exit__` methods called
+      by the :keyword:`with` statement.  See :pep:`343`.
+
    context manager
-      An object which controls the environment seen in a :keyword:`with`
-      statement by defining :meth:`~object.__enter__` and :meth:`~object.__exit__` methods.
-      See :pep:`343`.
+      An object which implements the :term:`context management protocol` and
+      controls the environment seen in a :keyword:`with` statement.  See
+      :pep:`343`.
 
    context variable
       A variable which can have different values depending on its context.
