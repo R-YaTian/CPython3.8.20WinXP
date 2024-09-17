@@ -181,7 +181,7 @@ class Uop:
             return None  # Adjusts next_instr, but only in tier 1 code
         if "INSTRUMENTED" in self.name:
             return "is instrumented"
-        if "replaced" in self.annotations:
+        if lexer.ANN_REPLACED in self.annotations:
             return "is replaced"
         if self.name in ("INTERPRETER_EXIT", "JUMP_BACKWARD"):
             return "has tier 1 control flow"
@@ -198,7 +198,7 @@ class Uop:
 
     def is_super(self) -> bool:
         for tkn in self.body:
-            if tkn.kind == "IDENTIFIER" and tkn.text == "oparg1":
+            if tkn.kind == lexer.IDENTIFIER and tkn.text == "oparg1":
                 return True
         return False
 
@@ -407,22 +407,24 @@ def analyze_deferred_refs(node: parser.InstDef) -> dict[lexer.Token, str | None]
 def variable_used(node: parser.InstDef, name: str) -> bool:
     """Determine whether a variable with a given name is used in a node."""
     return any(
-        token.kind == "IDENTIFIER" and token.text == name for token in node.block.tokens
+        token.kind == lexer.IDENTIFIER and token.text == name
+        for token in node.block.tokens
     )
 
 
 def oparg_used(node: parser.InstDef) -> bool:
     """Determine whether `oparg` is used in a node."""
     return any(
-        token.kind == "IDENTIFIER" and token.text == "oparg" for token in node.tokens
+        token.kind == lexer.IDENTIFIER and token.text == "oparg"
+        for token in node.tokens
     )
 
 
 def tier_variable(node: parser.InstDef) -> int | None:
     """Determine whether a tier variable is used in a node."""
     for token in node.tokens:
-        if token.kind == "ANNOTATION":
-            if token.text == "specializing":
+        if token.kind == lexer.ANNOTATION:
+            if token.text == lexer.ANN_SPECIALIZING:
                 return 1
             if re.fullmatch(r"tier\d", token.text):
                 return int(token.text[-1])
@@ -581,18 +583,20 @@ def always_exits(op: parser.InstDef) -> bool:
     depth = 0
     tkn_iter = iter(op.tokens)
     for tkn in tkn_iter:
-        if tkn.kind == "LBRACE":
+        if tkn.kind == lexer.LBRACE:
             depth += 1
-        elif tkn.kind == "RBRACE":
+        elif tkn.kind == lexer.RBRACE:
             depth -= 1
         elif depth > 1:
             continue
-        elif tkn.kind == "GOTO" or tkn.kind == "RETURN":
+        elif tkn.kind == lexer.GOTO or tkn.kind == lexer.RETURN:
             return True
         elif tkn.kind == "KEYWORD":
+            # XXX: This appears to be unreachable since we never
+            # set tkn.kind to "KEYWORD"
             if tkn.text in EXITS:
                 return True
-        elif tkn.kind == "IDENTIFIER":
+        elif tkn.kind == lexer.IDENTIFIER:
             if tkn.text in EXITS:
                 return True
             if tkn.text == "DEOPT_IF" or tkn.text == "ERROR_IF":
@@ -673,11 +677,12 @@ def compute_properties(op: parser.InstDef) -> Properties:
         uses_locals=(variable_used(op, "GETLOCAL") or variable_used(op, "SETLOCAL"))
         and not has_free,
         has_free=has_free,
-        pure="pure" in op.annotations,
+        pure=lexer.ANN_PURE in op.annotations,
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
     )
 
+ANN_REPLICATED = re.compile(rf'^{re.escape(lexer.ANN_REPLICATE)}\((\d+)\)$')
 
 def make_uop(
     name: str,
@@ -695,7 +700,7 @@ def make_uop(
         body=op.block.tokens,
         properties=compute_properties(op),
     )
-    if effect_depends_on_oparg_1(op) and "split" in op.annotations:
+    if effect_depends_on_oparg_1(op) and lexer.ANN_SPLIT in op.annotations:
         result.properties.oparg_and_1 = True
         for bit in ("0", "1"):
             name_x = name + "_" + bit
@@ -718,8 +723,8 @@ def make_uop(
             rep.replicates = result
             uops[name_x] = rep
     for anno in op.annotations:
-        if anno.startswith("replicate"):
-            result.replicated = int(anno[10:-1])
+        if match := ANN_REPLICATED.match(anno):
+            result.replicated = int(match.group(1))
             break
     else:
         return result
@@ -747,7 +752,7 @@ def make_uop(
 def add_op(op: parser.InstDef, uops: dict[str, Uop]) -> None:
     assert op.kind == "op"
     if op.name in uops:
-        if "override" not in op.annotations:
+        if lexer.ANN_OVERRIDE not in op.annotations:
             raise override_error(
                 op.name, op.context, uops[op.name].context, op.tokens[0]
             )
@@ -963,11 +968,11 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
     for uop in uops.values():
         tkn_iter = iter(uop.body)
         for tkn in tkn_iter:
-            if tkn.kind == "IDENTIFIER" and tkn.text == "GO_TO_INSTRUCTION":
-                if next(tkn_iter).kind != "LPAREN":
+            if tkn.kind == lexer.IDENTIFIER and tkn.text == "GO_TO_INSTRUCTION":
+                if next(tkn_iter).kind != lexer.LPAREN:
                     continue
                 target = next(tkn_iter)
-                if target.kind != "IDENTIFIER":
+                if target.kind != lexer.IDENTIFIER:
                     continue
                 if target.text in instructions:
                     instructions[target.text].is_target = True

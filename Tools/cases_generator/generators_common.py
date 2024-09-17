@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TextIO
+from typing import Callable, Mapping, TextIO, Iterator
 
 from analyzer import (
     Instruction,
@@ -9,8 +9,7 @@ from analyzer import (
     analysis_error,
 )
 from cwriter import CWriter
-from typing import Callable, Mapping, TextIO, Iterator
-from lexer import Token
+from lexer import COMMA, IDENTIFIER, LPAREN, RPAREN, Token
 from stack import Stack
 
 
@@ -52,9 +51,9 @@ def emit_to(out: CWriter, tkn_iter: Iterator[Token], end: str) -> None:
     for tkn in tkn_iter:
         if tkn.kind == end and parens == 0:
             return
-        if tkn.kind == "LPAREN":
+        if tkn.kind == LPAREN:
             parens += 1
-        if tkn.kind == "RPAREN":
+        if tkn.kind == RPAREN:
             parens -= 1
         out.emit(tkn)
 
