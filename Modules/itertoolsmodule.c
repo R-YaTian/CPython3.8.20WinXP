@@ -262,6 +262,9 @@ typedef struct {
     PyObject_HEAD
     PyObject *it;
     PyObject *old;
+#ifdef Py_GIL_DISABLED
+    int iterator_exhausted;
+#endif
     PyObject *result;
 } pairwiseobject;
 
@@ -294,6 +297,9 @@ pairwise_new_impl(PyTypeObject *type, PyObject *iterable)
     }
     po->it = it;
     po->old = NULL;
+#ifdef Py_GIL_DISABLED
+    po->iterator_exhausted = 0;
+#endif
     po->result = PyTuple_Pack(2, Py_None, Py_None);
     if (po->result == NULL) {
         Py_DECREF(po);
@@ -327,15 +333,23 @@ pairwise_traverse(pairwiseobject *po, visitproc visit, void *arg)
 static PyObject *
 pairwise_next(pairwiseobject *po)
 {
-    PyObject *it = po->it;
-    PyObject *old = po->old;
+    PyObject *it = FT_ATOMIC_LOAD_PTR(po->it);
+    PyObject *old = FT_ATOMIC_LOAD_PTR(po->old);
     PyObject *new, *result;
+    result = FT_ATOMIC_LOAD_PTR(po->result);
 
+#ifndef Py_GIL_DISABLED
     if (it == NULL) {
         return NULL;
     }
+#else
+    if (_Py_atomic_load_int_relaxed(&po->iterator_exhausted)) {
+        return NULL;
+    }
+#endif
     if (old == NULL) {
         old = (*Py_TYPE(it)->tp_iternext)(it);
+#ifndef Py_GIL_DISABLED
         Py_XSETREF(po->old, old);
         if (old == NULL) {
             Py_CLEAR(po->it);
@@ -346,7 +360,19 @@ pairwise_next(pairwiseobject *po)
             Py_CLEAR(po->old);
             return NULL;
         }
+#else
+        if (old == NULL) {
+            _Py_atomic_store_int_relaxed(&po->iterator_exhausted, 1);
+            return NULL;
+        }
+        PyObject *po_old =  ( PyObject *)_Py_atomic_exchange_ptr(&po->old, old);
+        //  we expect po_old to be zero, but it can have been set by
+        // a concurrent thread
+        Py_XDECREF(po_old);
+#endif
     }
+
+#ifndef Py_GIL_DISABLED
     Py_INCREF(old);
     new = (*Py_TYPE(it)->tp_iternext)(it);
     if (new == NULL) {
@@ -356,8 +382,8 @@ pairwise_next(pairwiseobject *po)
         return NULL;
     }
 
-    result = po->result;
-    if (Py_REFCNT(result) == 1) {
+    assert(result != NULL);
+    if (_PyObject_IsUniquelyReferenced(result)) {
         Py_INCREF(result);
         PyObject *last_old = PyTuple_GET_ITEM(result, 0);
         PyObject *last_new = PyTuple_GET_ITEM(result, 1);
@@ -378,8 +404,49 @@ pairwise_next(pairwiseobject *po)
             PyTuple_SET_ITEM(result, 1, Py_NewRef(new));
         }
     }
-
     Py_XSETREF(po->old, new);
+
+#else
+    // at this stage we know that po->old has been set, but we have to make
+    // sure that po->old is valid at every moment so we atomically swap old
+    // and new. for that we first need to acquire a new object
+    new = (*Py_TYPE(it)->tp_iternext)(it);
+    if (new == NULL) {
+        _Py_atomic_store_int_relaxed(&po->iterator_exhausted, 1);
+        return NULL;
+    }
+    // we need to incref new before handing it over to po->old
+    Py_INCREF(new);
+    old =  ( PyObject *)_Py_atomic_exchange_ptr(&po->old, new);
+    // we have acquired old and we hold a reference to it
+
+    assert(result != NULL);
+    if (_PyObject_IsUniquelyReferenced(result)) {
+        Py_INCREF(result);
+        PyObject *last_old = PyTuple_GET_ITEM(result, 0);
+        PyObject *last_new = PyTuple_GET_ITEM(result, 1);
+        PyTuple_SET_ITEM(result, 0, Py_NewRef(old));
+        PyTuple_SET_ITEM(result, 1, new); // steal reference
+        Py_DECREF(last_old);
+        Py_DECREF(last_new);
+        // bpo-42536: The GC may have untracked this result tuple. Since we're
+        // recycling it, make sure it's tracked again:
+        if (!_PyObject_GC_IS_TRACKED(result)) {
+            _PyObject_GC_TRACK(result);
+        }
+    }
+    else {
+        result = PyTuple_New(2);
+        if (result != NULL) {
+            PyTuple_SET_ITEM(result, 0, Py_NewRef(old));
+            PyTuple_SET_ITEM(result, 1, new); // steal reference
+        }
+        else {
+            Py_DECREF(new);
+        }
+    }
+#endif
+
     Py_DECREF(old);
     return result;
 }
