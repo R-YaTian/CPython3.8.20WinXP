@@ -919,8 +919,12 @@ from a C thread is::
 Note that the ``PyGILState_*`` functions assume there is only one global
 interpreter (created automatically by :c:func:`Py_Initialize`).  Python
 supports the creation of additional interpreters (using
-:c:func:`Py_NewInterpreter`), but mixing multiple interpreters and the
-``PyGILState_*`` API is unsupported.
+:c:func:`Py_NewInterpreter`), but switching between interpreters via the
+``PyGILState_*`` API is unsupported.  Similarly, after creating a
+sub-interpreter via :c:func:`!PyGILState_Ensure`, interacting with
+the GIL of other interpreters (including, but not limited to, trying
+to release the GIL to return back to the previous interpreter) is not
+supported.
 
 
 .. _fork-and-threads:
@@ -1074,8 +1078,13 @@ with sub-interpreters:
    Ensure that the current thread is ready to call the Python C API regardless
    of the current state of Python, or of the global interpreter lock. This may
    be called as many times as desired by a thread as long as each call is
-   matched with a call to :c:func:`PyGILState_Release`. In general, other
-   thread-related APIs may be used between :c:func:`PyGILState_Ensure` and
+   matched with a call to :c:func:`PyGILState_Release`, *except* when the
+   thread creates a sub-interpreter with its own GIL (see
+   :c:member:`PyInterpreterConfig.gil`).
+   In that case, :c:func:`Py_EndInterpreter` should be used instead to
+   release that interpreter's GIL.
+
+   In general, other thread-related APIs may be used between :c:func:`PyGILState_Ensure` and
    :c:func:`PyGILState_Release` calls as long as the thread state is restored to
    its previous state before the Release().  For example, normal usage of the
    :c:macro:`Py_BEGIN_ALLOW_THREADS` and :c:macro:`Py_END_ALLOW_THREADS` macros is
@@ -1090,6 +1099,9 @@ with sub-interpreters:
 
    When the function returns, the current thread will hold the GIL and be able
    to call arbitrary Python code.  Failure is a fatal error.
+
+   If no interpreter state has been initialized for the thread, then this function returns
+   the state of the global interpreter (created by :c:func:`Py_Initialize`).
 
    .. note::
       Calling this function from a thread when the runtime is finalizing
