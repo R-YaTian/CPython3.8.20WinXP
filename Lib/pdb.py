@@ -73,6 +73,7 @@ import cmd
 import bdb
 import dis
 import code
+import enum
 import glob
 import token
 import types
@@ -96,7 +97,14 @@ class Restart(Exception):
     pass
 
 __all__ = ["run", "pm", "Pdb", "runeval", "runctx", "runcall", "set_trace",
-           "post_mortem", "help"]
+           "post_mortem", "help", "PdbInvokeType"]
+
+
+class PdbInvokeType(enum.Enum):
+    """Enum to specify the type of invocation for the debugger."""
+    Unknown = "Unknown"
+    CommandLine = "CommandLine"
+    InlineBreakpoint = "InlineBreakpoint"
 
 
 def find_first_executable_line(code):
@@ -309,7 +317,7 @@ class Pdb(bdb.Bdb, cmd.Cmd):
     _last_pdb_instance = None
 
     def __init__(self, completekey='tab', stdin=None, stdout=None, skip=None,
-                 nosigint=False, readrc=True):
+                 nosigint=False, readrc=True, invoke_type=PdbInvokeType.Unknown):
         bdb.Bdb.__init__(self, skip=skip)
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
         sys.audit("pdb.Pdb")
@@ -321,6 +329,7 @@ class Pdb(bdb.Bdb, cmd.Cmd):
         self.mainpyfile = ''
         self._wait_for_mainpyfile = False
         self.tb_lineno = {}
+        self.invoke_type = invoke_type
         # Try to load readline if it exists
         try:
             import readline
@@ -1607,6 +1616,11 @@ class Pdb(bdb.Bdb, cmd.Cmd):
         sys.argv.  History, breakpoints, actions and debugger options
         are preserved.  "restart" is an alias for "run".
         """
+        if self.invoke_type == PdbInvokeType.InlineBreakpoint:
+            self.error('run/restart command is not allowed with inline breakpoints.\n'
+                       'Use the command line interface if you want to restart your program\n'
+                       'e.g. "python -m pdb myscript.py"')
+            return
         if arg:
             import shlex
             argv0 = sys.argv[0:1]
@@ -2361,7 +2375,7 @@ def set_trace(*, header=None):
     if Pdb._last_pdb_instance is not None:
         pdb = Pdb._last_pdb_instance
     else:
-        pdb = Pdb()
+        pdb = Pdb(invoke_type=PdbInvokeType.InlineBreakpoint)
     if header is not None:
         pdb.message(header)
     pdb.set_trace(sys._getframe().f_back)
@@ -2476,7 +2490,7 @@ def main():
     # modified by the script being debugged. It's a bad idea when it was
     # changed by the user from the command line. There is a "restart" command
     # which allows explicit specification of command line arguments.
-    pdb = Pdb()
+    pdb = Pdb(invoke_type=PdbInvokeType.CommandLine)
     pdb.rcLines.extend(opts.commands)
     while True:
         try:
