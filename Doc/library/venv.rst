@@ -37,14 +37,14 @@ A virtual environment is (amongst other things):
   are by default isolated from software in other virtual environments and Python
   interpreters and libraries installed in the operating system.
 
-* Contained in a directory, conventionally either named ``venv`` or ``.venv`` in
+* Contained in a directory, conventionally either named ``.venv`` or ``venv`` in
   the project directory, or under a container directory for lots of virtual
   environments, such as ``~/.virtualenvs``.
 
 * Not checked into source control systems such as Git.
 
 * Considered as disposable -- it should be simple to delete and recreate it from
-  scratch. You don't place any project code in the environment
+  scratch. You don't place any project code in the environment.
 
 * Not considered as movable or copyable -- you just recreate the same
   environment in the target location.
@@ -117,7 +117,7 @@ should be runnable without activating it.
 
 In order to achieve this, scripts installed into virtual environments have
 a "shebang" line which points to the environment's Python interpreter,
-i.e. :samp:`#!/{<path-to-venv>}/bin/python`.
+that is :samp:`#!/{<path-to-venv>}/bin/python`.
 This means that the script will run with that interpreter regardless of the
 value of :envvar:`PATH`. On Windows, "shebang" line processing is supported if
 you have the :ref:`launcher` installed. Thus, double-clicking an installed
@@ -345,8 +345,8 @@ creation according to their needs, the :class:`EnvBuilder` class.
     .. method:: install_scripts(context, path)
 
         *path* is the path to a directory that should contain subdirectories
-        "common", "posix", "nt", each containing scripts destined for the bin
-        directory in the environment.  The contents of "common" and the
+        ``common``, ``posix``, ``nt``, each containing scripts destined for the
+        bin directory in the environment.  The contents of ``common`` and the
         directory corresponding to :data:`os.name` are copied after some text
         replacement of placeholders:
 
@@ -371,7 +371,7 @@ creation according to their needs, the :class:`EnvBuilder` class.
     .. method:: create_git_ignore_file(context)
 
        Creates a ``.gitignore`` file within the virtual environment that causes
-       the entire directory to be ignored by the ``git`` source control manager.
+       the entire directory to be ignored by the Git source control manager.
 
        .. versionadded:: 3.13
 
@@ -387,16 +387,16 @@ There is also a module-level convenience function:
     .. versionadded:: 3.3
 
     .. versionchanged:: 3.4
-       Added the ``with_pip`` parameter
+       Added the *with_pip* parameter
 
     .. versionchanged:: 3.6
-       Added the ``prompt`` parameter
+       Added the *prompt* parameter
 
     .. versionchanged:: 3.9
-       Added the ``upgrade_deps`` parameter
+       Added the *upgrade_deps* parameter
 
     .. versionchanged:: 3.13
-       Added the ``scm_ignore_files`` parameter
+       Added the *scm_ignore_files* parameter
 
 An example of extending ``EnvBuilder``
 --------------------------------------

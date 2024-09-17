@@ -1,10 +1,12 @@
-Creation of :ref:`virtual environments <venv-def>` is done by executing the
-command ``venv``::
+:ref:`Virtual environments <venv-def>` are created by executing the ``venv``
+command:
+
+.. code-block:: bash
 
     python -m venv /path/to/new/virtual/environment
 
-Running this command creates the target directory (creating any parent
-directories that don't exist already) and places a ``pyvenv.cfg`` file in it
+This creates the target directory (creating any parent
+directories that don't already exist) and places a ``pyvenv.cfg`` file in it
 with a ``home`` key pointing to the Python installation from which the command
 was run (a common name for the target directory is ``.venv``).  It also creates
 a ``bin`` (or ``Scripts`` on Windows) subdirectory containing a copy/symlink
@@ -17,10 +19,9 @@ re-used.
 .. versionchanged:: 3.5
    The use of ``venv`` is now recommended for creating virtual environments.
 
-.. deprecated:: 3.6
-   ``pyvenv`` was the recommended tool for creating virtual environments for
-   Python 3.3 and 3.4, and is
-   :ref:`deprecated in Python 3.6 <whatsnew36-venv>`.
+.. deprecated-removed:: 3.6 3.8
+   :program:`pyvenv` was the recommended tool for creating virtual environments
+   for Python 3.3 and 3.4.
 
 .. highlight:: none
 
@@ -37,61 +38,61 @@ The command, if run with ``-h``, will show the available options::
 
    usage: venv [-h] [--system-site-packages] [--symlinks | --copies] [--clear]
                [--upgrade] [--without-pip] [--prompt PROMPT] [--upgrade-deps]
-               [--without-scm-ignore-file]
+               [--without-scm-ignore-files]
                ENV_DIR [ENV_DIR ...]
 
    Creates virtual Python environments in one or more target directories.
 
    positional arguments:
-   ENV_DIR               A directory to create the environment in.
+     ENV_DIR               A directory to create the environment in.
 
    options:
-   -h, --help            show this help message and exit
-   --system-site-packages
+     -h, --help            show this help message and exit
+     --system-site-packages
                            Give the virtual environment access to the system
                            site-packages dir.
-   --symlinks            Try to use symlinks rather than copies, when
+     --symlinks            Try to use symlinks rather than copies, when
                            symlinks are not the default for the platform.
-   --copies              Try to use copies rather than symlinks, even when
+     --copies              Try to use copies rather than symlinks, even when
                            symlinks are the default for the platform.
-   --clear               Delete the contents of the environment directory if
-                           it already exists, before environment creation.
-   --upgrade             Upgrade the environment directory to use this
-                           version of Python, assuming Python has been upgraded
-                           in-place.
-   --without-pip         Skips installing or upgrading pip in the virtual
+     --clear               Delete the contents of the environment directory
+                           if it already exists, before environment creation.
+     --upgrade             Upgrade the environment directory to use this
+                           version of Python, assuming Python has been
+                           upgraded in-place.
+     --without-pip         Skips installing or upgrading pip in the virtual
                            environment (pip is bootstrapped by default)
-   --prompt PROMPT       Provides an alternative prompt prefix for this
+     --prompt PROMPT       Provides an alternative prompt prefix for this
                            environment.
-   --upgrade-deps        Upgrade core dependencies (pip) to the latest
+     --upgrade-deps        Upgrade core dependencies (pip) to the latest
                            version in PyPI
-   --without-scm-ignore-file
-                           Skips adding the default SCM ignore file to the
-                           environment directory (the default is a .gitignore
-                           file).
+     --without-scm-ignore-files
+                           Skips adding SCM ignore files to the environment
+                           directory (Git is supported by default).
 
    Once an environment has been created, you may wish to activate it, e.g. by
    sourcing an activate script in its bin directory.
 
-.. versionchanged:: 3.13
 
-   ``--without-scm-ignore-file`` was added along with creating an ignore file
-   for ``git`` by default.
+.. versionchanged:: 3.4
+   Installs pip by default, added the ``--without-pip``  and ``--copies``
+   options.
+
+.. versionchanged:: 3.4
+   In earlier versions, if the target directory already existed, an error was
+   raised, unless the ``--clear`` or ``--upgrade`` option was provided.
+
+.. versionchanged:: 3.9
+   Add ``--upgrade-deps`` option to upgrade pip + setuptools to the latest on PyPI.
 
 .. versionchanged:: 3.12
 
    ``setuptools`` is no longer a core venv dependency.
 
-.. versionchanged:: 3.9
-   Add ``--upgrade-deps`` option to upgrade pip + setuptools to the latest on PyPI
+.. versionchanged:: 3.13
 
-.. versionchanged:: 3.4
-   Installs pip by default, added the ``--without-pip``  and ``--copies``
-   options
-
-.. versionchanged:: 3.4
-   In earlier versions, if the target directory already existed, an error was
-   raised, unless the ``--clear`` or ``--upgrade`` option was provided.
+   ``--without-scm-ignore-files`` was added along with creating an ignore file
+   for Git by default.
 
 .. note::
    While symlinks are supported on Windows, they are not recommended. Of
@@ -103,7 +104,9 @@ The command, if run with ``-h``, will show the available options::
    script by setting the execution policy for the user. You can do this by
    issuing the following PowerShell command:
 
-   PS C:\> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   .. code-block:: powershell
+
+      PS C:\> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
    See `About Execution Policies
    <https://go.microsoft.com/fwlink/?LinkID=135170>`_
