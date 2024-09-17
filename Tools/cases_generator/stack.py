@@ -51,14 +51,22 @@ class Local:
         return Local(defn, False, defn.is_array(), False)
 
     @staticmethod
-    def local(defn: StackItem) -> "Local":
+    def undefined(defn: StackItem) -> "Local":
         array = defn.is_array()
-        return Local(defn, not array, array, True)
+        return Local(defn, not array, array, False)
 
     @staticmethod
     def redefinition(var: StackItem, prev: "Local") -> "Local":
         assert var.is_array() == prev.is_array()
         return Local(var, prev.cached, prev.in_memory, True)
+
+    def copy(self) -> "Local":
+        return Local(
+            self.item,
+            self.cached,
+            self.in_memory,
+            self.defined
+        )
 
     @property
     def size(self) -> str:
@@ -74,6 +82,16 @@ class Local:
 
     def is_array(self) -> bool:
         return self.item.is_array()
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Local):
+            return NotImplemented
+        return (
+            self.item is other.item
+            and self.cached is other.cached
+            and self.in_memory is other.in_memory
+            and self.defined is other.defined
+        )
 
 
 @dataclass
@@ -159,6 +177,11 @@ class StackOffset:
     def clear(self) -> None:
         self.popped = []
         self.pushed = []
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, StackOffset):
+            return NotImplemented
+        return self.to_c() == other.to_c()
 
 
 class StackError(Exception):
@@ -292,18 +315,6 @@ class Stack:
             out.emit("assert(WITHIN_STACK_BOUNDS());\n")
         out.start_line()
 
-    def flush_locally(
-        self, out: CWriter, cast_type: str = "uintptr_t", extract_bits: bool = False
-    ) -> None:
-        self._do_flush(
-            out,
-            self.variables[:],
-            self.base_offset.copy(),
-            self.top_offset.copy(),
-            cast_type,
-            extract_bits,
-        )
-
     def flush(
         self, out: CWriter, cast_type: str = "uintptr_t", extract_bits: bool = False
     ) -> None:
@@ -351,6 +362,29 @@ class Stack:
     def as_comment(self) -> str:
         return f"/* Variables: {[v.name for v in self.variables]}. Base offset: {self.base_offset.to_c()}. Top offset: {self.top_offset.to_c()} */"
 
+    def copy(self) -> "Stack":
+        other = Stack()
+        other.top_offset = self.top_offset.copy()
+        other.base_offset = self.base_offset.copy()
+        other.variables = [var.copy() for var in self.variables]
+        other.defined = set(self.defined)
+        return other
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Stack):
+            return NotImplemented
+        return (
+            self.top_offset == other.top_offset
+            and self.base_offset == other.base_offset
+            and self.variables == other.variables
+            and self.defined == other.defined
+        )
+
+
+    def merge(self, other:"Stack") -> "Stack":
+        if self != other:
+            raise StackError("unequal stacks")
+        return self
 
 def get_stack_effect(inst: Instruction | PseudoInstruction) -> Stack:
     stack = Stack()
@@ -377,3 +411,58 @@ def get_stack_effect(inst: Instruction | PseudoInstruction) -> Stack:
                 local = Local.unused(var)
             stack.push(local)
     return stack
+
+@dataclass
+class Storage:
+
+    stack: Stack
+    outputs: list[Local]
+
+    def _push_defined_locals(self) -> None:
+        while self.outputs:
+            out = self.outputs[0]
+            if out.defined:
+                self.stack.push(out)
+                self.outputs.pop(0)
+            else:
+                break
+        undefined = ""
+        for out in self.outputs:
+            if out.defined:
+                raise StackError(
+                    f"Locals not defined in stack order. "
+                    f"Expected  '{out.name}' is defined before '{undefined}'"
+                )
+            else:
+                undefined = out.name
+
+    def flush(self, out: CWriter) -> None:
+        self._push_defined_locals()
+        self.stack.flush(out)
+
+    @staticmethod
+    def for_uop(stack: Stack, uop: Uop, locals: dict[str, Local]) -> "Storage":
+        outputs: list[Local] = []
+        for var in uop.stack.outputs:
+            if not var.peek:
+                if var.name in locals:
+                    local = locals[var.name]
+                elif var.name == "unused":
+                    local = Local.unused(var)
+                else:
+                    local = Local.undefined(var)
+                outputs.append(local)
+        return Storage(stack, outputs)
+
+    def copy(self) -> "Storage":
+        return Storage(self.stack.copy(), [ l.copy() for l in self.outputs])
+
+    def merge(self, other: "Storage", out: CWriter) -> "Storage":
+        self.stack.merge(other.stack)
+        if self.outputs != other.outputs:
+            raise StackError("unequal locals")
+        return self
+
+    def as_comment(self) -> str:
+        stack_comment = self.stack.as_comment()
+        return stack_comment[:-2] + str(self.outputs) + " */"

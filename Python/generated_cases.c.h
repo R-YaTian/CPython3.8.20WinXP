@@ -1590,7 +1590,9 @@
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
                         frame, this_instr, func, arg);
-                    if (err) goto error;
+                    if (err) {
+                        goto error;
+                    }
                     result = PyStackRef_FromPyObjectSteal(PyObject_Call(func, callargs, kwargs));
                     if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
                         if (PyStackRef_IsNull(result)) {
@@ -4533,7 +4535,9 @@
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
                     frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
-                if (err) goto error;
+                if (err) {
+                    goto error;
+                }
             }
             // _RETURN_VALUE
             retval = val;
@@ -4573,7 +4577,9 @@
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
                     frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
-                if (err) goto error;
+                if (err) {
+                    goto error;
+                }
             }
             // _RETURN_VALUE
             retval = val;
@@ -4617,7 +4623,9 @@
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
                     frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
                 LOAD_SP();
-                if (err) goto error;
+                if (err) {
+                    goto error;
+                }
                 if (frame->instr_ptr != this_instr) {
                     next_instr = frame->instr_ptr;
                     DISPATCH();
@@ -4885,6 +4893,8 @@
                     attr_o = PyObject_GetAttr(PyStackRef_AsPyObjectBorrow(owner), name);
                     PyStackRef_CLOSE(owner);
                     if (attr_o == NULL) goto pop_1_error;
+                    /* We need to define self_or_null on all paths */
+                    self_or_null = PyStackRef_NULL;
                 }
                 attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
@@ -7057,10 +7067,12 @@
                 PyStackRef_CLOSE(v);
                 if (true) goto pop_1_error;
             }
-            if (PyDict_CheckExact(ns))
-            err = PyDict_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
-            else
-            err = PyObject_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            if (PyDict_CheckExact(ns)) {
+                err = PyDict_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            }
+            else {
+                err = PyObject_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            }
             PyStackRef_CLOSE(v);
             if (err) goto pop_1_error;
             stack_pointer += -1;
@@ -7692,7 +7704,9 @@
                 int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
                     frame, this_instr, func, arg);
-                if (err) goto error;
+                if (err) {
+                    goto error;
+                }
                 result = PyStackRef_FromPyObjectSteal(PyObject_Call(func, callargs, kwargs));
                 if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
                     if (PyStackRef_IsNull(result)) {

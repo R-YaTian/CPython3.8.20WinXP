@@ -1430,10 +1430,12 @@
                 PyStackRef_CLOSE(v);
                 if (true) JUMP_TO_ERROR();
             }
-            if (PyDict_CheckExact(ns))
-            err = PyDict_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
-            else
-            err = PyObject_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            if (PyDict_CheckExact(ns)) {
+                err = PyDict_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            }
+            else {
+                err = PyObject_SetItem(ns, name, PyStackRef_AsPyObjectBorrow(v));
+            }
             PyStackRef_CLOSE(v);
             if (err) JUMP_TO_ERROR();
             stack_pointer += -1;
@@ -2235,6 +2237,8 @@
                 attr_o = PyObject_GetAttr(PyStackRef_AsPyObjectBorrow(owner), name);
                 PyStackRef_CLOSE(owner);
                 if (attr_o == NULL) JUMP_TO_ERROR();
+                /* We need to define self_or_null on all paths */
+                self_or_null = PyStackRef_NULL;
             }
             attr = PyStackRef_FromPyObjectSteal(attr_o);
             stack_pointer[-1] = attr;
