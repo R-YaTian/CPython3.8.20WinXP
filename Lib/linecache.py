@@ -1,10 +1,10 @@
+import importlib._bootstrap_external
 """Cache lines from Python source files.
 
 This is intended to read lines from modules imported -- hence if a filename
 is not found, it will look down the module search path for a file by
 that name.
 """
-
 __all__ = ["getline", "clearcache", "checkcache", "lazycache"]
 
 
@@ -177,11 +177,16 @@ def lazycache(filename, module_globals):
         return False
     # Try for a __loader__, if available
     if module_globals and '__name__' in module_globals:
+        get_lines = lambda *_, **__: ""
         spec = module_globals.get('__spec__')
         name = getattr(spec, 'name', None) or module_globals['__name__']
         loader = getattr(spec, 'loader', None)
         if loader is None:
             loader = module_globals.get('__loader__')
+        mod_file = module_globals.get('__file__')
+        if isinstance(loader, importlib._bootstrap_external.SourceFileLoader) and (not mod_file or (not mod_file.endswith(filename) and not mod_file.endswith('.pyc'))):
+            cache[filename] = (get_lines,)
+            return True
         get_source = getattr(loader, 'get_source', None)
 
         if name and get_source:
