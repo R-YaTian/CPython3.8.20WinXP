@@ -893,9 +893,8 @@ class ReTests(unittest.TestCase):
         self.assertTrue(re.search(r"\B", "abc"))
         # There is no non-boundary match at the start of a string.
         self.assertFalse(re.match(r"\B", "abc"))
-        # However, an empty string contains no word boundaries, and also no
-        # non-boundaries.
-        self.assertIsNone(re.search(r"\B", ""))
+        # gh-124130: An empty string should be non-boundary.
+        self.assertTrue(re.match(r"\B", ""))
         # This one is questionable and different from the perlre behaviour,
         # but describes current behavior.
         self.assertIsNone(re.search(r"\b", ""))
