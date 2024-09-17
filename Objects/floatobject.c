@@ -412,6 +412,7 @@ float_richcompare(PyObject *v, PyObject *w, int op)
         /* The signs are the same. */
         /* Convert w to a double if it fits.  In particular, 0 fits. */
         uint64_t nbits64 = _PyLong_NumBits(w);
+        assert(!PyErr_Occurred());
         if (nbits64 > (unsigned int)DBL_MAX_EXP) {
             /* This Python integer is larger than any finite C double.
              * Replace with little doubles
@@ -419,11 +420,6 @@ float_richcompare(PyObject *v, PyObject *w, int op)
              * its magnitude must exceed the magnitude of any
              * finite float.
              */
-            if (nbits64 == (uint64_t)-1 && PyErr_Occurred()) {
-                /* This Python integer is so large that uint64_t isn't
-                 * big enough to hold the # of bits. */
-                PyErr_Clear();
-            }
             i = (double)vsign;
             assert(wsign != 0);
             j = wsign * 2.0;
