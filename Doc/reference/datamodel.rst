@@ -1055,6 +1055,7 @@ Special attributes:
 
    :attr:`__firstlineno__`
       The line number of the first line of the class definition, including decorators.
+      Setting the :attr:`__module__` attribute removes the :attr:`!__firstlineno__` item from the type's dictionary.
 
 
 Class instances
