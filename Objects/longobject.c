@@ -1117,53 +1117,18 @@ _resolve_endianness(int *endianness)
     return 0;
 }
 
-Py_ssize_t
-PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
+
+static Py_ssize_t
+long_asnativebytes(PyLongObject *v, void* buffer, Py_ssize_t n,
+                   int little_endian, int unsigned_buffer)
 {
-    PyLongObject *v;
+    Py_ssize_t res = 0;
     union {
         Py_ssize_t v;
         unsigned char b[sizeof(Py_ssize_t)];
     } cv;
-    int do_decref = 0;
-    Py_ssize_t res = 0;
-
-    if (vv == NULL || n < 0) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    int little_endian = flags;
-    if (_resolve_endianness(&little_endian) < 0) {
-        return -1;
-    }
-
-    if (PyLong_Check(vv)) {
-        v = (PyLongObject *)vv;
-    }
-    else if (flags != -1 && (flags & Py_ASNATIVEBYTES_ALLOW_INDEX)) {
-        v = (PyLongObject *)_PyNumber_Index(vv);
-        if (v == NULL) {
-            return -1;
-        }
-        do_decref = 1;
-    }
-    else {
-        PyErr_Format(PyExc_TypeError, "expect int, got %T", vv);
-        return -1;
-    }
-
-    if ((flags != -1 && (flags & Py_ASNATIVEBYTES_REJECT_NEGATIVE))
-        && _PyLong_IsNegative(v)) {
-        PyErr_SetString(PyExc_ValueError, "Cannot convert negative int");
-        if (do_decref) {
-            Py_DECREF(v);
-        }
-        return -1;
-    }
 
     if (_PyLong_IsCompact(v)) {
-        res = 0;
         cv.v = _PyLong_CompactValue(v);
         /* Most paths result in res = sizeof(compact value). Only the case
          * where 0 < n < sizeof(compact value) do we need to check and adjust
@@ -1200,7 +1165,7 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
                 /* Positive values with the MSB set do not require an
                  * additional bit when the caller's intent is to treat them
                  * as unsigned. */
-                if (flags == -1 || (flags & Py_ASNATIVEBYTES_UNSIGNED_BUFFER)) {
+                if (unsigned_buffer) {
                     res = n;
                 } else {
                     res = n + 1;
@@ -1287,7 +1252,7 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
                  * as unsigned. */
                 unsigned char *b = (unsigned char *)buffer;
                 if (b[little_endian ? n - 1 : 0] & 0x80) {
-                    if (flags == -1 || (flags & Py_ASNATIVEBYTES_UNSIGNED_BUFFER)) {
+                    if (unsigned_buffer) {
                         res = n;
                     } else {
                         res = n + 1;
@@ -1296,6 +1261,54 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
             }
         }
     }
+    return res;
+}
+
+
+Py_ssize_t
+PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
+{
+    PyLongObject *v;
+    int do_decref = 0;
+    Py_ssize_t res = 0;
+
+    if (vv == NULL || n < 0) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+
+    int little_endian = flags;
+    if (_resolve_endianness(&little_endian) < 0) {
+        return -1;
+    }
+
+    if (PyLong_Check(vv)) {
+        v = (PyLongObject *)vv;
+    }
+    else if (flags != -1 && (flags & Py_ASNATIVEBYTES_ALLOW_INDEX)) {
+        v = (PyLongObject *)_PyNumber_Index(vv);
+        if (v == NULL) {
+            return -1;
+        }
+        do_decref = 1;
+    }
+    else {
+        PyErr_Format(PyExc_TypeError, "expect int, got %T", vv);
+        return -1;
+    }
+
+    if ((flags != -1 && (flags & Py_ASNATIVEBYTES_REJECT_NEGATIVE))
+        && _PyLong_IsNegative(v)) {
+        PyErr_SetString(PyExc_ValueError, "Cannot convert negative int");
+        if (do_decref) {
+            Py_DECREF(v);
+        }
+        return -1;
+    }
+
+    int unsigned_buffer = (flags == -1
+                           || (flags & Py_ASNATIVEBYTES_UNSIGNED_BUFFER));
+    res = long_asnativebytes(v, buffer, n, little_endian, unsigned_buffer);
 
     if (do_decref) {
         Py_DECREF(v);
@@ -6708,6 +6721,7 @@ PyUnstable_Long_CompactValue(const PyLongObject* op) {
     return _PyLong_CompactValue((PyLongObject*)op);
 }
 
+
 PyObject* PyLong_FromInt32(int32_t value)
 { return PyLong_FromNativeBytes(&value, sizeof(value), -1); }
 
@@ -6772,4 +6786,108 @@ int PyLong_AsUInt32(PyObject *obj, uint32_t *value)
 int PyLong_AsUInt64(PyObject *obj, uint64_t *value)
 {
     LONG_TO_UINT(obj, value, "C uint64_t");
+}
+
+
+static const PyLongLayout PyLong_LAYOUT = {
+    .bits_per_digit = PyLong_SHIFT,
+    .digits_order = -1,  // least significant first
+    .endian = PY_LITTLE_ENDIAN ? -1 : 1,
+    .digit_size = sizeof(digit),
+};
+
+
+const PyLongLayout* PyLong_GetNativeLayout(void)
+{
+    return &PyLong_LAYOUT;
+}
+
+
+int
+PyLong_Export(PyObject *obj, PyLongExport *export_long)
+{
+    if (!PyLong_Check(obj)) {
+        PyErr_Format(PyExc_TypeError, "expect int, got %T", obj);
+        return -1;
+    }
+    PyLongObject *self = (PyLongObject*)obj;
+
+    int64_t value;
+    Py_ssize_t bytes = long_asnativebytes(self, &value, sizeof(value),
+                                          PY_LITTLE_ENDIAN, 0);
+
+    if ((size_t)bytes <= sizeof(value)) {
+        export_long->value = value;
+        export_long->negative = 0;
+        export_long->ndigits = 0;
+        export_long->digits = 0;
+        export_long->_reserved = 0;
+    }
+    else {
+        export_long->value = 0;
+        export_long->negative = _PyLong_IsNegative(self);
+        export_long->ndigits = _PyLong_DigitCount(self);
+        if (export_long->ndigits == 0) {
+            export_long->ndigits = 1;
+        }
+        export_long->digits = self->long_value.ob_digit;
+        export_long->_reserved = (Py_uintptr_t)Py_NewRef(obj);
+    }
+    return 0;
+}
+
+
+void
+PyLong_FreeExport(PyLongExport *export_long)
+{
+    PyObject *obj = (PyObject*)export_long->_reserved;
+    export_long->_reserved = 0;
+    Py_XDECREF(obj);
+}
+
+
+/* --- PyLongWriter API --------------------------------------------------- */
+
+PyLongWriter*
+PyLongWriter_Create(int negative, Py_ssize_t ndigits, void **digits)
+{
+    if (ndigits < 0) {
+        PyErr_SetString(PyExc_ValueError, "ndigits must be positive");
+        return NULL;
+    }
+    assert(digits != NULL);
+
+    PyLongObject *obj = _PyLong_New(ndigits);
+    if (obj == NULL) {
+        return NULL;
+    }
+    if (ndigits == 0) {
+        assert(obj->long_value.ob_digit[0] == 0);
+    }
+    if (negative) {
+        _PyLong_FlipSign(obj);
+    }
+
+    *digits = obj->long_value.ob_digit;
+    return (PyLongWriter*)obj;
+}
+
+
+void PyLongWriter_Discard(PyLongWriter *writer)
+{
+    PyLongObject *obj = (PyLongObject *)writer;
+    assert(Py_REFCNT(obj) == 1);
+    Py_DECREF(obj);
+}
+
+
+PyObject* PyLongWriter_Finish(PyLongWriter *writer)
+{
+    PyLongObject *obj = (PyLongObject *)writer;
+    assert(Py_REFCNT(obj) == 1);
+
+    // Normalize and get singleton if possible
+    obj = maybe_small_long(long_normalize(obj));
+
+    return (PyObject*)obj;
 }
