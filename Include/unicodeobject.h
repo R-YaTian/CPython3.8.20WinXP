@@ -248,6 +248,23 @@ PyAPI_FUNC(PyObject *) PyUnicode_InternFromString(
     const char *u              /* UTF-8 encoded string */
     );
 
+#if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030e0000
+#define PyUnicode_FORMAT_UCS1  0x01   // Py_UCS1*
+#define PyUnicode_FORMAT_UCS2  0x02   // Py_UCS2*
+#define PyUnicode_FORMAT_UCS4  0x04   // Py_UCS4*
+#define PyUnicode_FORMAT_UTF8  0x08   // char*
+#define PyUnicode_FORMAT_ASCII 0x10   // char* (ASCII string)
+
+PyAPI_FUNC(int32_t) PyUnicode_Export(
+    PyObject *unicode,
+    int32_t requested_formats,
+    Py_buffer *view);
+PyAPI_FUNC(PyObject*) PyUnicode_Import(
+    const void *data,
+    Py_ssize_t nbytes,
+    int32_t format);
+#endif
+
 /* --- wchar_t support for platforms which support it --------------------- */
 
 #ifdef HAVE_WCHAR_H

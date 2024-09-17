@@ -208,6 +208,9 @@ unicode_decode_utf8_writer(_PyUnicodeWriter *writer,
 static inline int unicode_is_finalizing(void);
 static int unicode_is_singleton(PyObject *unicode);
 #endif
+static Py_UCS4*
+as_ucs4(PyObject *string, Py_UCS4 *target, Py_ssize_t targetsize,
+        int copy_null);
 
 
 // Return a reference to the immortal empty string singleton.
@@ -2332,6 +2335,194 @@ PyUnicodeWriter_WriteUCS4(PyUnicodeWriter *pub_writer,
 }
 
 
+static int32_t
+unicode_export(PyObject *obj, Py_buffer *view,
+               Py_ssize_t len, const void *buf,
+               int itemsize, const char *format, int32_t export_format)
+{
+    if (PyBuffer_FillInfo(view, obj, (void*)buf, len,
+                          1, PyBUF_SIMPLE) < 0) {
+        return -1;
+    }
+    view->itemsize = itemsize;
+    view->format = (char*)format;
+    return export_format;
+}
+
+
+static int32_t
+unicode_export_bytes(PyObject *bytes, Py_buffer *view, Py_ssize_t len,
+                     int itemsize, const char *format, int32_t export_format)
+{
+    const void *buf = PyBytes_AS_STRING(bytes);
+
+    if (PyBuffer_FillInfo(view, bytes, (void*)buf, len,
+                          1, PyBUF_SIMPLE) < 0)
+    {
+        Py_DECREF(bytes);
+        return -1;
+    }
+    Py_DECREF(bytes);
+
+    view->itemsize = itemsize;
+    view->format = (char*)format;
+    return export_format;
+}
+
+
+int32_t
+PyUnicode_Export(PyObject *unicode, int32_t requested_formats,
+                 Py_buffer *view)
+{
+    if (!PyUnicode_Check(unicode)) {
+        PyErr_Format(PyExc_TypeError, "must be str, not %T", unicode);
+        return -1;
+    }
+    Py_ssize_t len = PyUnicode_GET_LENGTH(unicode);
+
+    // Native ASCII
+    if (PyUnicode_IS_ASCII(unicode)
+        && (requested_formats & PyUnicode_FORMAT_ASCII))
+    {
+        return unicode_export(unicode, view,
+                              len, PyUnicode_1BYTE_DATA(unicode),
+                              1, "B", PyUnicode_FORMAT_ASCII);
+    }
+
+    // Native UCS1
+    int kind = PyUnicode_KIND(unicode);
+    if (kind == PyUnicode_1BYTE_KIND
+        && (requested_formats & PyUnicode_FORMAT_UCS1))
+    {
+        return unicode_export(unicode, view,
+                              len, PyUnicode_1BYTE_DATA(unicode),
+                              1, "B", PyUnicode_FORMAT_UCS1);
+    }
+
+    // Native UCS2
+    if (kind == PyUnicode_2BYTE_KIND
+        && (requested_formats & PyUnicode_FORMAT_UCS2))
+    {
+        return unicode_export(unicode, view,
+                              len, PyUnicode_2BYTE_DATA(unicode),
+                              2, "=H", PyUnicode_FORMAT_UCS2);
+    }
+
+    // Convert ASCII or UCS1 to UCS2
+    if (kind == PyUnicode_1BYTE_KIND
+        && requested_formats & PyUnicode_FORMAT_UCS2)
+    {
+        PyObject *bytes = PyBytes_FromStringAndSize(NULL, (len + 1) * 2);
+        if (!bytes) {
+            return -1;
+        }
+        Py_UCS2 *ucs2 = (Py_UCS2*)PyBytes_AS_STRING(bytes);
+
+        _PyUnicode_CONVERT_BYTES(Py_UCS1, Py_UCS2,
+                                 PyUnicode_1BYTE_DATA(unicode),
+                                 PyUnicode_1BYTE_DATA(unicode) + len,
+                                 ucs2);
+        ucs2[len] = 0;
+
+        return unicode_export_bytes(bytes, view, len,
+                                    2, "=H", PyUnicode_FORMAT_UCS2);
+    }
+
+    // Native UCS4
+    if (kind == PyUnicode_4BYTE_KIND
+        && (requested_formats & PyUnicode_FORMAT_UCS4))
+    {
+        return unicode_export(unicode, view,
+                              len, PyUnicode_4BYTE_DATA(unicode),
+                              4, "=I", PyUnicode_FORMAT_UCS4);
+    }
+
+    // Convert ASCII, UCS1 or UCS2 to UCS4
+    if (requested_formats & PyUnicode_FORMAT_UCS4) {
+        PyObject *bytes = PyBytes_FromStringAndSize(NULL, (len + 1) * 4);
+        if (bytes == NULL) {
+            return -1;
+        }
+        Py_UCS4 *ucs4 = (Py_UCS4*)PyBytes_AS_STRING(bytes);
+
+        (void)as_ucs4(unicode, ucs4, len + 1, 1);
+
+        return unicode_export_bytes(bytes, view, len,
+                                    4, "=I", PyUnicode_FORMAT_UCS4);
+    }
+
+    // Encode UCS1, UCS2 or UCS4 to UTF-8
+    if (requested_formats & PyUnicode_FORMAT_UTF8) {
+        Py_ssize_t nbytes;
+        const char *utf8 = PyUnicode_AsUTF8AndSize(unicode, &nbytes);
+        if (utf8 != NULL) {
+            return unicode_export(unicode, view,
+                                  nbytes, utf8,
+                                  1, "B", PyUnicode_FORMAT_UTF8);
+        }
+        if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
+            PyErr_Clear();
+            PyObject *bytes = _PyUnicode_AsUTF8String(unicode, "surrogatepass");
+            if (bytes == NULL) {
+                return -1;
+            }
+            len = PyBytes_GET_SIZE(bytes);
+
+            return unicode_export_bytes(bytes, view, PyBytes_GET_SIZE(bytes),
+                                        1, "B", PyUnicode_FORMAT_UTF8);
+        }
+        return -1;
+    }
+
+    PyErr_SetString(PyExc_ValueError,
+                    "unable to find a matching export format");
+    return -1;
+}
+
+
+PyObject*
+PyUnicode_Import(const void *data, Py_ssize_t nbytes,
+                 int32_t format)
+{
+    if (nbytes < 0) {
+        PyErr_SetString(PyExc_ValueError, "Negative nbytes");
+        return NULL;
+    }
+
+    switch (format)
+    {
+    case PyUnicode_FORMAT_ASCII:
+        return PyUnicode_DecodeASCII((const char*)data, nbytes, NULL);
+
+    case PyUnicode_FORMAT_UCS1:
+        return _PyUnicode_FromUCS1(data, nbytes);
+
+    case PyUnicode_FORMAT_UCS2:
+        if (nbytes % 2) {
+            PyErr_Format(PyExc_ValueError, "nbytes must be a multiple of 2: %zd",
+                         nbytes);
+            return NULL;
+        }
+        return _PyUnicode_FromUCS2(data, nbytes / 2);
+
+    case PyUnicode_FORMAT_UCS4:
+        if (nbytes % 4) {
+            PyErr_Format(PyExc_ValueError, "nbytes must be a multiple of 4: %zd",
+                         nbytes);
+            return NULL;
+        }
+        return _PyUnicode_FromUCS4(data, nbytes / 4);
+
+    case PyUnicode_FORMAT_UTF8:
+        return PyUnicode_DecodeUTF8((const char*)data, nbytes, NULL);
+
+    default:
+        PyErr_Format(PyExc_ValueError, "unknown format: %i", format);
+        return NULL;
+    }
+}
+
+
 PyObject*
 PyUnicode_FromKindAndData(int kind, const void *buffer, Py_ssize_t size)
 {
@@ -2508,15 +2699,14 @@ static Py_UCS4*
 as_ucs4(PyObject *string, Py_UCS4 *target, Py_ssize_t targetsize,
         int copy_null)
 {
-    int kind;
-    const void *data;
-    Py_ssize_t len, targetlen;
-    kind = PyUnicode_KIND(string);
-    data = PyUnicode_DATA(string);
-    len = PyUnicode_GET_LENGTH(string);
-    targetlen = len;
-    if (copy_null)
+    int kind = PyUnicode_KIND(string);
+    const void *data = PyUnicode_DATA(string);
+    Py_ssize_t len = PyUnicode_GET_LENGTH(string);
+    Py_ssize_t targetlen = len;
+    if (copy_null) {
         targetlen++;
+    }
+
     if (!target) {
         target = PyMem_New(Py_UCS4, targetlen);
         if (!target) {
@@ -2528,11 +2718,13 @@ as_ucs4(PyObject *string, Py_UCS4 *target, Py_ssize_t targetsize,
         if (targetsize < targetlen) {
             PyErr_Format(PyExc_SystemError,
                          "string is longer than the buffer");
-            if (copy_null && 0 < targetsize)
+            if (copy_null && 0 < targetsize) {
                 target[0] = 0;
+            }
             return NULL;
         }
     }
+
     if (kind == PyUnicode_1BYTE_KIND) {
         const Py_UCS1 *start = (const Py_UCS1 *) data;
         _PyUnicode_CONVERT_BYTES(Py_UCS1, Py_UCS4, start, start + len, target);
@@ -2547,8 +2739,10 @@ as_ucs4(PyObject *string, Py_UCS4 *target, Py_ssize_t targetsize,
     else {
         Py_UNREACHABLE();
     }
-    if (copy_null)
+    if (copy_null) {
         target[len] = 0;
+    }
+
     return target;
 }
 

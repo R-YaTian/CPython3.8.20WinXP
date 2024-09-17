@@ -1,7 +1,7 @@
 #include "pyconfig.h"   // Py_GIL_DISABLED
 #ifndef Py_GIL_DISABLED
-   // Need limited C API 3.13 to test PyUnicode_EqualToUTF8()
-#  define Py_LIMITED_API 0x030d0000
+   // Need limited C API 3.14 to test PyUnicode_Export()
+#  define Py_LIMITED_API 0x030e0000
 #endif
 
 #include "parts.h"
@@ -1837,6 +1837,71 @@ test_string_from_format(PyObject *self, PyObject *Py_UNUSED(ignored))
 #undef CHECK_FORMAT_0
 }
 
+
+// Test PyUnicode_Export()
+static PyObject*
+unicode_export(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    unsigned int requested_formats;
+    if (!PyArg_ParseTuple(args, "OI", &obj, &requested_formats)) {
+        return NULL;
+    }
+
+    Py_buffer view;
+    int32_t format = PyUnicode_Export(obj, requested_formats, &view);
+    if (format < 0) {
+        return NULL;
+    }
+
+    // Make sure that the exported string ends with a NUL character
+    char *data = view.buf;
+    Py_ssize_t nbytes = view.len * view.itemsize;
+    switch (format)
+    {
+    case PyUnicode_FORMAT_ASCII:
+    case PyUnicode_FORMAT_UCS1:
+        assert(data[nbytes] == 0);
+        break;
+    case PyUnicode_FORMAT_UCS2:
+        assert(data[nbytes] == 0);
+        assert(data[nbytes + 1] == 0);
+        break;
+    case PyUnicode_FORMAT_UCS4:
+        assert(data[nbytes] == 0);
+        assert(data[nbytes + 1] == 0);
+        assert(data[nbytes + 2] == 0);
+        assert(data[nbytes + 3] == 0);
+        break;
+    case PyUnicode_FORMAT_UTF8:
+        assert(data[nbytes] == 0);
+        break;
+    }
+
+    assert(view.format != NULL);
+    PyObject *res = Py_BuildValue("y#iis",
+                                  view.buf, view.len * view.itemsize,
+                                  (int)format,
+                                  (int)view.itemsize, view.format);
+    PyBuffer_Release(&view);
+    return res;
+}
+
+
+// Test PyUnicode_Import()
+static PyObject*
+unicode_import(PyObject *self, PyObject *args)
+{
+    const void *data;
+    Py_ssize_t nbytes;
+    int format;
+    if (!PyArg_ParseTuple(args, "y#i", &data, &nbytes, &format)) {
+        return NULL;
+    }
+    return PyUnicode_Import(data, nbytes, (int32_t)format);
+}
+
+
 static PyMethodDef TestMethods[] = {
     {"codec_incrementalencoder", codec_incrementalencoder,       METH_VARARGS},
     {"codec_incrementaldecoder", codec_incrementaldecoder,       METH_VARARGS},
@@ -1924,6 +1989,8 @@ static PyMethodDef TestMethods[] = {
     {"unicode_format",           unicode_format,                 METH_VARARGS},
     {"unicode_contains",         unicode_contains,               METH_VARARGS},
     {"unicode_isidentifier",     unicode_isidentifier,           METH_O},
+    {"unicode_export",           unicode_export,                 METH_VARARGS},
+    {"unicode_import",           unicode_import,                 METH_VARARGS},
     {NULL},
 };
 
