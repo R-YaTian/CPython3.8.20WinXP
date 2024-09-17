@@ -402,7 +402,7 @@ Module contents
    :func:`!astuple` raises :exc:`TypeError` if *obj* is not a dataclass
    instance.
 
-.. function:: make_dataclass(cls_name, fields, *, bases=(), namespace=None, init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False, match_args=True, kw_only=False, slots=False, weakref_slot=False, module=None)
+.. function:: make_dataclass(cls_name, fields, *, bases=(), namespace=None, init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False, match_args=True, kw_only=False, slots=False, weakref_slot=False, module=None, dataclass_factory=dataclass)
 
    Creates a new dataclass with name *cls_name*, fields as defined
    in *fields*, base classes as given in *bases*, and initialized
@@ -417,6 +417,11 @@ Module contents
    If *module* is defined, the :attr:`!__module__` attribute
    of the dataclass is set to that value.
    By default, it is set to the module name of the caller.
+
+   The *dataclass_factory* is a callable that will be used to create the dataclass.
+   It should take the class object as a first argument and the same keyword arguments
+   as :func:`@dataclass <dataclass>`. By default, the :func:`@dataclass <dataclass>`
+   function is used.
 
    This function is not strictly required, because any Python
    mechanism for creating a new class with :attr:`!__annotations__` can
@@ -440,6 +445,9 @@ Module contents
 
          def add_one(self):
              return self.x + 1
+
+   .. versionadded:: 3.14
+      Added the *dataclass_factory* parameter.
 
 .. function:: replace(obj, /, **changes)
 
