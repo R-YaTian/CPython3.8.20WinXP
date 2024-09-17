@@ -198,6 +198,12 @@ operator
   (Contributed by Raymond Hettinger and Nico Mexis in :gh:`115808`.)
 
 
+asyncio
+-------
+
+Made :class:`asyncio.Queue` an :term:`asynchronous iterable`.
+(Contributed by Wannes Boeykens in :gh:`119154`.)
+
 os
 --
 
