@@ -31,6 +31,7 @@
 
 #include <Python.h>
 #include "pycore_long.h"          // _PyLong_IsZero()
+#include "pycore_object.h"        // _Py_DECREF_NO_DEALLOC()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_typeobject.h"
 #include "complexobject.h"
@@ -122,6 +123,7 @@ get_module_state(PyObject *mod)
 }
 
 static struct PyModuleDef _decimal_module;
+static PyType_Spec dec_spec;
 
 static inline decimal_state *
 get_module_state_by_def(PyTypeObject *tp)
@@ -131,13 +133,20 @@ get_module_state_by_def(PyTypeObject *tp)
     return get_module_state(mod);
 }
 
-static inline decimal_state *
+static inline Py_ALWAYS_INLINE decimal_state *
 find_state_left_or_right(PyObject *left, PyObject *right)
 {
-    PyObject *mod = _PyType_GetModuleByDef2(Py_TYPE(left), Py_TYPE(right),
-                                            &_decimal_module);
-    assert(mod != NULL);
-    return get_module_state(mod);
+    PyTypeObject *base;
+    if (PyType_GetBaseByToken(Py_TYPE(left), &dec_spec, &base) != 1) {
+        PyType_GetBaseByToken(Py_TYPE(right), &dec_spec, &base);
+    }
+    assert(base != NULL);
+    // Immediate decref for optimization, which is safe
+    // while `base` lives in the subclass's tp_bases.
+    _Py_DECREF_NO_DEALLOC((PyObject *)base);
+    void *state = _PyType_GetModuleState(base);
+    assert(state != NULL);
+    return (decimal_state *)state;
 }
 
 
@@ -745,7 +754,7 @@ signaldict_richcompare(PyObject *v, PyObject *w, int op)
 {
     PyObject *res = Py_NotImplemented;
 
-    decimal_state *state = find_state_left_or_right(v, w);
+    decimal_state *state = get_module_state_by_def(Py_TYPE(v));
     assert(PyDecSignalDict_Check(state, v));
 
     if ((SdFlagAddr(v) == NULL) || (SdFlagAddr(w) == NULL)) {
@@ -4653,7 +4662,7 @@ dec_richcompare(PyObject *v, PyObject *w, int op)
     uint32_t status = 0;
     int a_issnan, b_issnan;
     int r;
-    decimal_state *state = find_state_left_or_right(v, w);
+    decimal_state *state = get_module_state_by_def(Py_TYPE(v));
 
 #ifdef Py_DEBUG
     assert(PyDec_Check(state, v));
@@ -5041,6 +5050,7 @@ static PyMethodDef dec_methods [] =
 };
 
 static PyType_Slot dec_slots[] = {
+    {Py_tp_token, Py_TP_USE_SPEC},
     {Py_tp_dealloc, dec_dealloc},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, dec_traverse},
