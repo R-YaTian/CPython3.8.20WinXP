@@ -41,6 +41,9 @@ typedef struct _PyThreadStateImpl {
         // If set, don't use thread-local refcounts
         int is_finalized;
     } types;
+
+    // Index to use to retrieve thread-local bytecode for this thread
+    Py_ssize_t tlbc_index;
 #endif
 
 #if defined(Py_REF_DEBUG) && defined(Py_GIL_DISABLED)
