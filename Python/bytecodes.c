@@ -4831,6 +4831,10 @@ dummy_func(
             assert(((_PyExecutorObject *)executor)->vm_data.valid);
         }
 
+        tier2 op(_MAKE_WARM, (--)) {
+            current_executor->vm_data.warm = true;
+        }
+
         tier2 op(_FATAL_ERROR, (--)) {
             assert(0);
             Py_FatalError("Fatal error uop executed.");

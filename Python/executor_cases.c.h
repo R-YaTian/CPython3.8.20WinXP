@@ -5448,6 +5448,11 @@
             break;
         }
 
+        case _MAKE_WARM: {
+            current_executor->vm_data.warm = true;
+            break;
+        }
+
         case _FATAL_ERROR: {
             assert(0);
             Py_FatalError("Fatal error uop executed.");
