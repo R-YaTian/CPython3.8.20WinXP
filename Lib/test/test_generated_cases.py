@@ -1234,15 +1234,15 @@ class TestGeneratedAbstractCases(unittest.TestCase):
         """
         output = """
         case OP: {
-            _Py_UopsSymbol *arg1;
-            _Py_UopsSymbol *out;
+            _Py_UopsLocalsPlusSlot arg1;
+            _Py_UopsLocalsPlusSlot out;
             eggs();
             stack_pointer[-1] = out;
             break;
         }
 
         case OP2: {
-            _Py_UopsSymbol *out;
+            _Py_UopsLocalsPlusSlot out;
             out = sym_new_not_null(ctx);
             stack_pointer[-1] = out;
             break;
@@ -1266,15 +1266,15 @@ class TestGeneratedAbstractCases(unittest.TestCase):
         """
         output = """
         case OP: {
-            _Py_UopsSymbol *out;
+            _Py_UopsLocalsPlusSlot out;
             out = sym_new_not_null(ctx);
             stack_pointer[-1] = out;
             break;
         }
 
         case OP2: {
-            _Py_UopsSymbol *arg1;
-            _Py_UopsSymbol *out;
+            _Py_UopsLocalsPlusSlot arg1;
+            _Py_UopsLocalsPlusSlot out;
             stack_pointer[-1] = out;
             break;
         }

@@ -324,6 +324,8 @@ remove_globals(_PyInterpreterFrame *frame, _PyUOpInstruction *buffer,
 #define sym_set_type(SYM, TYPE) _Py_uop_sym_set_type(ctx, SYM, TYPE)
 #define sym_set_type_version(SYM, VERSION) _Py_uop_sym_set_type_version(ctx, SYM, VERSION)
 #define sym_set_const(SYM, CNST) _Py_uop_sym_set_const(ctx, SYM, CNST)
+#define sym_set_locals_idx _Py_uop_sym_set_locals_idx
+#define sym_get_locals_idx _Py_uop_sym_get_locals_idx
 #define sym_is_bottom _Py_uop_sym_is_bottom
 #define sym_truthiness _Py_uop_sym_truthiness
 #define frame_new _Py_uop_frame_new
@@ -333,8 +335,8 @@ static int
 optimize_to_bool(
     _PyUOpInstruction *this_instr,
     _Py_UOpsContext *ctx,
-    _Py_UopsSymbol *value,
-    _Py_UopsSymbol **result_ptr)
+    _Py_UopsLocalsPlusSlot value,
+    _Py_UopsLocalsPlusSlot *result_ptr)
 {
     if (sym_matches_type(value, &PyBool_Type)) {
         REPLACE_OP(this_instr, _NOP, 0, 0);
@@ -385,6 +387,12 @@ get_code(_PyUOpInstruction *op)
     return co;
 }
 
+static inline _Py_UopsLocalsPlusSlot
+sym_to_slot(_Py_UopsSymbol *sym)
+{
+    return (_Py_UopsLocalsPlusSlot){sym, 0};
+}
+
 /* 1 for success, 0 for not ready, cannot error at the moment. */
 static int
 optimize_uops(
@@ -422,7 +430,7 @@ optimize_uops(
 
         int oparg = this_instr->oparg;
         opcode = this_instr->opcode;
-        _Py_UopsSymbol **stack_pointer = ctx->frame->stack_pointer;
+        _Py_UopsLocalsPlusSlot *stack_pointer = ctx->frame->stack_pointer;
 
 #ifdef Py_DEBUG
         if (get_lltrace() >= 3) {
@@ -485,6 +493,191 @@ error:
 
 }
 
+#define WRITE_OP(INST, OP, ARG, OPERAND)    \
+    (INST)->opcode = OP;            \
+    (INST)->oparg = ARG;            \
+    (INST)->operand = OPERAND;
+
+#define SET_STATIC_INST() instr_is_truly_static = true;
+
+static void
+reify_shadow_stack(_Py_UOpsContext *ctx)
+{
+    _PyUOpInstruction *trace_dest = ctx->trace_dest;
+    for (_Py_UopsLocalsPlusSlot *sp = ctx->frame->stack; sp < ctx->frame->stack_pointer; sp++) {
+        _Py_UopsLocalsPlusSlot slot = *sp;
+        assert(slot.sym != NULL);
+        // Need reifying.
+        if (slot.is_virtual) {
+            sp->is_virtual = false;
+            if (slot.sym->locals_idx >= 0) {
+                DPRINTF(3, "reifying %d LOAD_FAST %d\n", (int)(sp - ctx->frame->stack), slot.sym->locals_idx);
+                WRITE_OP(&trace_dest[ctx->n_trace_dest], _LOAD_FAST, slot.sym->locals_idx, 0);
+                trace_dest[ctx->n_trace_dest].format = UOP_FORMAT_TARGET;
+                trace_dest[ctx->n_trace_dest].target = 0;
+            }
+            else if (slot.sym->const_val) {
+                DPRINTF(3, "reifying %d LOAD_CONST_INLINE %p\n", (int)(sp - ctx->frame->stack), slot.sym->const_val);
+                WRITE_OP(&trace_dest[ctx->n_trace_dest], _Py_IsImmortal(slot.sym->const_val) ?
+                    _LOAD_CONST_INLINE_BORROW : _LOAD_CONST_INLINE, 0, (uint64_t)slot.sym->const_val);
+                trace_dest[ctx->n_trace_dest].format = UOP_FORMAT_TARGET;
+                trace_dest[ctx->n_trace_dest].target = 0;
+            }
+            else if (sym_is_null(slot)) {
+                DPRINTF(3, "reifying %d PUSH_NULL\n", (int)(sp - ctx->frame->stack));
+                WRITE_OP(&trace_dest[ctx->n_trace_dest], _PUSH_NULL, 0, 0);
+            }
+            else {
+                // Is static but not a constant value of locals or NULL.
+                // How is that possible?
+                Py_UNREACHABLE();
+            }
+            ctx->n_trace_dest++;
+            if (ctx->n_trace_dest >= UOP_MAX_TRACE_LENGTH) {
+                ctx->out_of_space = true;
+                ctx->done = true;
+                return;
+            }
+        }
+    }
+}
+
+/* 1 for success, 0 for not ready, cannot error at the moment. */
+static int
+partial_evaluate_uops(
+    PyCodeObject *co,
+    _PyUOpInstruction *trace,
+    int trace_len,
+    int curr_stacklen,
+    _PyBloomFilter *dependencies
+)
+{
+
+    _PyUOpInstruction trace_dest[UOP_MAX_TRACE_LENGTH];
+    _Py_UOpsContext context;
+    context.trace_dest = trace_dest;
+    context.n_trace_dest = 0;
+    _Py_UOpsContext *ctx = &context;
+    uint32_t opcode = UINT16_MAX;
+    int curr_space = 0;
+    int max_space = 0;
+    _PyUOpInstruction *first_valid_check_stack = NULL;
+    _PyUOpInstruction *corresponding_check_stack = NULL;
+
+    _Py_uop_abstractcontext_init(ctx);
+    _Py_UOpsAbstractFrame *frame = _Py_uop_frame_new(ctx, co, curr_stacklen, NULL, 0);
+    if (frame == NULL) {
+        return -1;
+    }
+    ctx->curr_frame_depth++;
+    ctx->frame = frame;
+    ctx->done = false;
+    ctx->out_of_space = false;
+    ctx->contradiction = false;
+
+    _PyUOpInstruction *this_instr = NULL;
+    int i = 0;
+    for (; !ctx->done; i++) {
+        assert(i < trace_len);
+        this_instr = &trace[i];
+
+        int oparg = this_instr->oparg;
+        opcode = this_instr->opcode;
+        _Py_UopsLocalsPlusSlot *stack_pointer = ctx->frame->stack_pointer;
+
+        // An instruction is candidate static if it has no escapes, and all its inputs
+        // are static.
+        // If so, whether it can be eliminated is up to whether it has an implementation.
+        bool instr_is_truly_static = false;
+        if (!(_PyUop_Flags[opcode] & HAS_STATIC_FLAG)) {
+            reify_shadow_stack(ctx);
+        }
+
+#ifdef Py_DEBUG
+        if (get_lltrace() >= 3) {
+            printf("%4d pe: ", (int)(this_instr - trace));
+            _PyUOpPrint(this_instr);
+            printf(" ");
+        }
+#endif
+
+        switch (opcode) {
+
+#include "partial_evaluator_cases.c.h"
+
+            default:
+                DPRINTF(1, "\nUnknown opcode in pe's abstract interpreter\n");
+                Py_UNREACHABLE();
+        }
+        assert(ctx->frame != NULL);
+        DPRINTF(3, " stack_level %d\n", STACK_LEVEL());
+        ctx->frame->stack_pointer = stack_pointer;
+        assert(STACK_LEVEL() >= 0);
+        if (!instr_is_truly_static) {
+            trace_dest[ctx->n_trace_dest] = *this_instr;
+            ctx->n_trace_dest++;
+            if (ctx->n_trace_dest >= UOP_MAX_TRACE_LENGTH) {
+                ctx->out_of_space = true;
+                ctx->done = true;
+            }
+        }
+        else {
+            // Inst is static. Nothing written :)!
+            assert((_PyUop_Flags[opcode] & HAS_STATIC_FLAG));
+#ifdef Py_DEBUG
+            if (get_lltrace() >= 3) {
+                printf("%4d pe -STATIC-\n", (int) (this_instr - trace));
+            }
+#endif
+        }
+        if (ctx->done) {
+            break;
+        }
+    }
+    if (ctx->out_of_space) {
+        DPRINTF(3, "\n");
+        DPRINTF(1, "Out of space in pe's abstract interpreter\n");
+    }
+    if (ctx->contradiction) {
+        // Attempted to push a "bottom" (contradiction) symbol onto the stack.
+        // This means that the abstract interpreter has hit unreachable code.
+        // We *could* generate an _EXIT_TRACE or _FATAL_ERROR here, but hitting
+        // bottom indicates type instability, so we are probably better off
+        // retrying later.
+        DPRINTF(3, "\n");
+        DPRINTF(1, "Hit bottom in pe's abstract interpreter\n");
+        _Py_uop_abstractcontext_fini(ctx);
+        return 0;
+    }
+
+    if (ctx->out_of_space || !is_terminator(this_instr)) {
+        _Py_uop_abstractcontext_fini(ctx);
+        return trace_len;
+    }
+    else {
+        // We MUST not have bailed early here.
+        // That's the only time the PE's residual is valid.
+        assert(ctx->n_trace_dest < UOP_MAX_TRACE_LENGTH);
+        assert(is_terminator(this_instr));
+        assert(ctx->n_trace_dest <= trace_len);
+
+        // Copy trace_dest into trace.
+        memcpy(trace, trace_dest, ctx->n_trace_dest * sizeof(_PyUOpInstruction ));
+        int trace_dest_len = ctx->n_trace_dest;
+        _Py_uop_abstractcontext_fini(ctx);
+        return trace_dest_len;
+    }
+
+error:
+    DPRINTF(3, "\n");
+    DPRINTF(1, "Encountered error in pe's abstract interpreter\n");
+    if (opcode <= MAX_UOP_ID) {
+        OPT_ERROR_IN_OPCODE(opcode);
+    }
+    _Py_uop_abstractcontext_fini(ctx);
+    return -1;
+
+}
 
 static int
 remove_unneeded_uops(_PyUOpInstruction *buffer, int buffer_size)
@@ -598,8 +791,19 @@ _Py_uop_analyze_and_optimize(
         return length;
     }
 
+    // Help the PE by removing as many _CHECK_VALIDITY as possible,
+    // Since PE treats that as non-static since it can deopt arbitrarily.
     length = remove_unneeded_uops(buffer, length);
     assert(length > 0);
+
+    length = partial_evaluate_uops(
+        _PyFrame_GetCode(frame), buffer,
+        length, curr_stacklen, dependencies);
+
+    if (length <= 0) {
+        return length;
+    }
+
 
     OPT_STAT_INC(optimizer_successes);
     return length;
