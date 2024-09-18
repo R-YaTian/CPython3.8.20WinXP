@@ -790,7 +790,8 @@ extern int _PyObject_StoreInstanceAttribute(PyObject *obj,
                                             PyObject *name, PyObject *value);
 extern bool _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name,
                                               PyObject **attr);
-
+extern bool _PyObject_TryGetInstanceAttributeStackRef(PyObject *obj, PyObject *name,
+                                              _PyStackRef *attr);
 #ifdef Py_GIL_DISABLED
 #  define MANAGED_DICT_OFFSET    (((Py_ssize_t)sizeof(PyObject *))*-1)
 #  define MANAGED_WEAKREF_OFFSET (((Py_ssize_t)sizeof(PyObject *))*-2)
@@ -837,6 +838,7 @@ PyAPI_FUNC(PyObject*) _PyObject_LookupSpecialMethod(PyObject *self, PyObject *at
 extern int _PyObject_IsAbstract(PyObject *);
 
 PyAPI_FUNC(int) _PyObject_GetMethod(PyObject *obj, PyObject *name, PyObject **method);
+PyAPI_FUNC(int) _PyObject_GetMethodStackRef(PyObject *obj, PyObject *name, _PyStackRef *method);
 extern PyObject* _PyObject_NextNotImplemented(PyObject *);
 
 // Pickle support.
@@ -873,6 +875,8 @@ PyAPI_DATA(PyTypeObject) _PyNotImplemented_Type;
 PyAPI_DATA(int) _Py_SwappedOp[];
 
 extern void _Py_GetConstant_Init(void);
+
+extern void _PyType_LookupStackRef(PyTypeObject *type, PyObject *name, _PyStackRef *result);
 
 #ifdef __cplusplus
 }
