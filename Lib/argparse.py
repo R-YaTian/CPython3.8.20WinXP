@@ -2234,6 +2234,18 @@ class ArgumentParser(_AttributeHolder, _ActionsContainer):
         # return the list of arg string counts
         return result
 
+    def _extract_optional_arguments(self):
+        optionals = []
+
+        for action in self._actions:
+            if not isinstance(action, _SubParsersAction):
+                continue
+            if hasattr(action, 'choices'):
+                for choices in action.choices.values():
+                    for action in choices._actions:
+                        optionals.extend(action.option_strings)
+        return optionals
+
     def _parse_optional(self, arg_string):
         # if it's an empty string, it was meant to be a positional
         if not arg_string:
@@ -2261,6 +2273,12 @@ class ArgumentParser(_AttributeHolder, _ActionsContainer):
         # search through all possible prefixes of the option string
         # and all actions in the parser for possible interpretations
         option_tuples = self._get_option_tuples(arg_string)
+
+        # if the parameter string exists,
+        # similar matching exception isn't thrown
+        optionals = self._extract_optional_arguments()
+        if arg_string in optionals:
+            return None
 
         # if multiple actions match, the option string was ambiguous
         if len(option_tuples) > 1:
