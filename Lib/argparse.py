@@ -2470,12 +2470,18 @@ class ArgumentParser(_AttributeHolder, _ActionsContainer):
     # Value conversion methods
     # ========================
     def _get_values(self, action, arg_strings):
-        # for everything but PARSER, REMAINDER args, strip out first '--'
         if not action.option_strings and action.nargs not in [PARSER, REMAINDER]:
-            try:
-                arg_strings.remove('--')
-            except ValueError:
-                pass
+            if action.nargs == ZERO_OR_MORE and action.type is None:
+                # if nargs='*' starts with '--', then we should treat any
+                # subsequent arguments as positional arguments and we should not
+                # strip out the first '--' unless it violates the specified nargs type
+                if arg_strings and arg_strings[0] == '--':
+                    arg_strings = arg_strings[1:]
+            else:
+                try:
+                    arg_strings.remove('--')
+                except ValueError:
+                    pass
 
         # optional argument produces a default when not present
         if not arg_strings and action.nargs == OPTIONAL:
