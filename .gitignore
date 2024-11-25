@@ -110,7 +110,6 @@ PCbuild/win32/
 /python.exe-gdb.py
 /reflog.txt
 /coverage/
-/externals/
 /htmlcov/
 Tools/msi/obj
 Tools/ssl/amd64

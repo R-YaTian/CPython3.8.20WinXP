@@ -32,7 +32,7 @@ if "%DO_FETCH%"=="false" goto end
 
 if "%ORG%"=="" (set ORG=python)
 
-call "%PCBUILD%\find_python.bat" "%PYTHON%"
+::call "%PCBUILD%\find_python.bat" "%PYTHON%"
 
 echo.Fetching external libraries...
 
