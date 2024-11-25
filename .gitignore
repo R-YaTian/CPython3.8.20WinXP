@@ -8,7 +8,6 @@
 *.a
 *.so*
 *.dylib
-*.dll
 *.orig
 *.pyc
 *.pyd
@@ -126,4 +125,16 @@ Tools/ssl/win32
 /Modules/Setup.bootstrap
 /Modules/Setup.stdlib
 /Python/deepfreeze/
-/Python/frozen_modules/ 
+/Python/frozen_modules/
+
+/externals/openssl-1.1.1w/tmp32dll
+*.user
+*.iobj
+*.obj
+*.tlog
+*.log
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Rr]eleases/

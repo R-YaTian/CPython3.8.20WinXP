@@ -57,6 +57,7 @@ EFI64(ffi_prep_cif_machdep)(ffi_cif *cif)
   switch (cif->abi)
     {
     case FFI_WIN64:
+    case FFI_VECTORCALL_PARTIAL:
     case FFI_GNUW64:
       break;
     default:
@@ -107,6 +108,13 @@ EFI64(ffi_prep_cif_machdep)(ffi_cif *cif)
   return FFI_OK;
 }
 
+/* We perform some black magic here to use some of the parent's stack frame in
+ * ffi_call_win64() that breaks with the MSVC compiler with the /RTCs or /GZ
+ * flags.  Disable the 'Stack frame run time error checking' for this function
+ * so we don't hit weird exceptions in debug builds. */
+#if defined(_MSC_VER)
+#pragma runtime_checks("s", off)
+#endif
 static void
 ffi_call_int (ffi_cif *cif, void (*fn)(void), void *rvalue,
 	      void **avalue, void *closure)
@@ -116,7 +124,7 @@ ffi_call_int (ffi_cif *cif, void (*fn)(void), void *rvalue,
   size_t rsize;
   struct win64_call_frame *frame;
 
-  FFI_ASSERT(cif->abi == FFI_GNUW64 || cif->abi == FFI_WIN64);
+  FFI_ASSERT(cif->abi == FFI_GNUW64 || cif->abi == FFI_WIN64 || cif->abi == FFI_VECTORCALL_PARTIAL);
 
   flags = cif->flags;
   rsize = 0;
@@ -171,6 +179,9 @@ ffi_call_int (ffi_cif *cif, void (*fn)(void), void *rvalue,
 
   ffi_call_win64 (stack, frame, closure);
 }
+#if defined(_MSC_VER)
+#pragma runtime_checks("s", restore)
+#endif
 
 void
 EFI64(ffi_call)(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
@@ -209,6 +220,7 @@ EFI64(ffi_prep_closure_loc)(ffi_closure* closure,
   switch (cif->abi)
     {
     case FFI_WIN64:
+    case FFI_VECTORCALL_PARTIAL:
     case FFI_GNUW64:
       break;
     default:
@@ -232,6 +244,7 @@ EFI64(ffi_prep_go_closure)(ffi_go_closure* closure, ffi_cif* cif,
   switch (cif->abi)
     {
     case FFI_WIN64:
+    case FFI_VECTORCALL_PARTIAL:
     case FFI_GNUW64:
       break;
     default:
