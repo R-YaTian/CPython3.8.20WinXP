@@ -58,6 +58,10 @@
     <WarningsFlags>WARNINGS="-W3 -wd4311 -wd4312"</WarningsFlags>
     <NMakeBuildCommandLine>setlocal
 set VCINSTALLDIR=$(VCInstallDir)
+call "$(VCInstallDir)Auxiliary\Build\vcvarsall.bat" x86 -vcvars_ver=14.16
+set INCLUDE=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Include;%INCLUDE%
+set PATH=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Bin;%PATH%
+set LIB=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Lib;%LIB%
 cd /D "$(tclDir)win"
 nmake -f makefile.vc MACHINE=$(TclMachine) OPTS=$(TclOpts) $(TclDirs) $(DebugFlags) $(WarningsFlags) core shell dlls
 nmake -f makefile.vc MACHINE=$(TclMachine) OPTS=$(TclOpts) $(TclDirs) $(DebugFlags) $(WarningsFlags) install-binaries install-libraries

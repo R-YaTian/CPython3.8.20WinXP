@@ -673,7 +673,7 @@ Overlapped_dealloc(OverlappedObject *self)
     SetLastError(olderr);
 }
 
-#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+#if defined(NTDDI_VERSION) && (NTDDI_VERSION < NTDDI_LONGHORN)
 /* inet_ntop impl for Windows XP */
 
 static const char* inet_ntop(int af, const void *src, char *dst, socklen_t size)

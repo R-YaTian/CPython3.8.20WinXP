@@ -33,7 +33,7 @@ if "%~1"=="--certificate" (set SigningCertificate=%~2) && shift && shift & goto 
 if "%~1"=="-c" (set SigningCertificate=%~2) && shift && shift & goto CheckOpts
 if "%~1"=="--organization" (set ORG_SETTING=--organization "%~2") && shift && shift && goto CheckOpts
 
-if "%~1"=="" goto Build
+if "%~1"=="" goto Build1
 echo Unrecognized option: %1
 goto Usage
 
@@ -46,10 +46,11 @@ rem if ERRORLEVEL 1 (echo Cannot locate python.exe on PATH or as PYTHON variable
 
 call "%PCBUILD%\get_externals.bat" --tkinter-src %ORG_SETTING%
 
+:Build1
 %MSBUILD% "%PCBUILD%\tcl.vcxproj" /p:Configuration=Release /p:Platform=Win32
 %MSBUILD% "%PCBUILD%\tk.vcxproj" /p:Configuration=Release /p:Platform=Win32
 %MSBUILD% "%PCBUILD%\tix.vcxproj" /p:Configuration=Release /p:Platform=Win32
 
-%MSBUILD% "%PCBUILD%\tcl.vcxproj" /p:Configuration=Release /p:Platform=x64
-%MSBUILD% "%PCBUILD%\tk.vcxproj" /p:Configuration=Release /p:Platform=x64
-%MSBUILD% "%PCBUILD%\tix.vcxproj" /p:Configuration=Release /p:Platform=x64
+::%MSBUILD% "%PCBUILD%\tcl.vcxproj" /p:Configuration=Release /p:Platform=x64
+::%MSBUILD% "%PCBUILD%\tk.vcxproj" /p:Configuration=Release /p:Platform=x64
+::%MSBUILD% "%PCBUILD%\tix.vcxproj" /p:Configuration=Release /p:Platform=x64

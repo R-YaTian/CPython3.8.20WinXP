@@ -440,7 +440,7 @@ remove_unusable_flags(PyObject *m)
 #endif
 
 #ifdef HAVE_INET_PTON
-#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+#if defined(NTDDI_VERSION) && (NTDDI_VERSION < NTDDI_LONGHORN)
 int inet_pton(int af, const char *src, void *dst);
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 #endif
@@ -6797,7 +6797,11 @@ socket_if_nametoindex(PyObject *self, PyObject *args)
                           PyUnicode_FSConverter, &oname))
         return NULL;
 
+#ifdef MS_WINDOWS
     index = IsWindowsVistaOrGreater() ? if_nametoindex(PyBytes_AS_STRING(oname)) : IPHLP_if_nametoindex(PyBytes_AS_STRING(oname));
+#else
+    index = if_nametoindex(PyBytes_AS_STRING(oname));
+#endif
     Py_DECREF(oname);
     if (index == 0) {
         /* if_nametoindex() doesn't set errno */
@@ -6833,6 +6837,7 @@ socket_if_indextoname(PyObject *self, PyObject *arg)
     }
 
     char name[IF_NAMESIZE + 1];
+#ifdef MS_WINDOWS
     if (IsWindowsVistaOrGreater() && if_indextoname(index, name) == NULL) {
         PyErr_SetFromErrno(PyExc_OSError);
         return NULL;
@@ -6840,6 +6845,12 @@ socket_if_indextoname(PyObject *self, PyObject *arg)
         PyErr_SetFromErrno(PyExc_OSError);
         return NULL;
     }
+#else
+    if (if_indextoname(index, name) == NULL) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+#endif
 
     return PyUnicode_DecodeFSDefault(name);
 }
@@ -8327,7 +8338,7 @@ PyInit__socket(void)
 }
 
 #ifdef HAVE_INET_PTON
-#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+#if defined(NTDDI_VERSION) && (NTDDI_VERSION < NTDDI_LONGHORN)
 int inet_pton(int af, const char *src, void *dst)
 {
     struct sockaddr_storage ss;

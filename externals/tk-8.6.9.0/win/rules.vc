@@ -1398,7 +1398,7 @@ INCLUDES = $(INCLUDES) -I"$(GENERICDIR)" -I"$(WINDIR)" -I"$(COMPATDIR)"
 # post-reform build logs
 
 # cflags contains generic flags used for building practically all object files
-cflags = -nologo -c $(COMPILERFLAGS) $(carch) $(cwarn) -Fp$(TMP_DIR)^\ $(cdebug)
+cflags = -nologo -c $(COMPILERFLAGS) $(carch) $(cwarn) -D _USING_V110_SDK71_ -Fp$(TMP_DIR)^\ $(cdebug)
 
 # appcflags contains $(cflags) and flags for building the application
 # object files (e.g. tclsh, or wish) pkgcflags contains $(cflags) plus
@@ -1459,9 +1459,9 @@ lflags	= $(lflags) -opt:nowin98
 !endif
 !endif
 
-dlllflags = $(lflags) -dll
-conlflags = $(lflags) -subsystem:console
-guilflags = $(lflags) -subsystem:windows
+dlllflags = $(lflags) -dll -subsystem:console,"5.01"
+conlflags = $(lflags) -subsystem:console,"5.01"
+guilflags = $(lflags) -subsystem:windows,"5.01"
 
 # Libraries that are required for every image.
 # Extensions should define any additional libraries with $(PRJ_LIBS)

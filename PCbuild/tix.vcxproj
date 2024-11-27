@@ -59,6 +59,10 @@
     <CFlags>-c -W3 -nologo -MD -wd4028 -wd4090 -wd4244 -wd4267 -wd4312</CFlags>
     <NMakeBuildCommandLine>setlocal
 set VCINSTALLDIR=$(VCInstallDir)
+call "$(VCInstallDir)Auxiliary\Build\vcvarsall.bat" x86 -vcvars_ver=14.16
+set INCLUDE=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Include;%INCLUDE%
+set PATH=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Bin;%PATH%
+set LIB=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Lib;%LIB%
 cd /D "$(tixDir)win"
 nmake /nologo -f makefile.vc MACHINE=$(TclMachine) cflags="$(CFlags)" $(DebugFlags) $(TclShortVersions) $(TixDirs) all install
 copy /Y ..\license.terms "$(OutDir)\tixlicense.terms"

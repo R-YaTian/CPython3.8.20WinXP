@@ -49,7 +49,7 @@ TCL_MAJOR	= 8
 TCL_MINOR	= 6
 !ENDIF
 !IFNDEF TCL_PATCH
-TCL_PATCH	= 1
+TCL_PATCH	= 9
 !ENDIF
 
 TK_MAJOR	= $(TCL_MAJOR)
@@ -130,7 +130,7 @@ RM		= del
 # Compile flags
 #
 
-cflags = -c -W3 -nologo
+cflags = -c -W3 -nologo -D _USING_V110_SDK71_
 
 !IF "$(UCRT)" == "1"
 cflags	= $(cflags) -MT
@@ -154,7 +154,7 @@ lcommon 	= /RELEASE /NOLOGO
 
 # declarations for use on Intel i386, i486, and Pentium systems
 !IF "$(MACHINE)" == "IX86"
-lflags	 	= $(lcommon) /MACHINE:$(MACHINE)
+lflags	 	= $(lcommon) /MACHINE:$(MACHINE) /subsystem:console,"5.01"
 !ELSE
 lflags	 	= $(lcommon) /MACHINE:$(MACHINE)
 !ENDIF
@@ -181,7 +181,7 @@ optflags 	= -Oti -Gs
 optflags 	= -Od -Zi
 !ENDIF
 
-cvarsdll  	= -DWIN32 -D_WIN32 -D_MT -DSTDC_HEADERS
+cvarsdll  	= -DWIN32 -D_WIN32 -D_MT -DSTDC_HEADERS -D_USING_V110_SDK71_
 !IF "$(UCRT)" != "1"
 cvarsdll  	= $(cvarsdll) -D_DLL
 !ENDIF
