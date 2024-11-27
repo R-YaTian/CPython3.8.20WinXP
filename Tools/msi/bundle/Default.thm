@@ -21,8 +21,8 @@
 
         <Text X="185" Y="50" Width="-11" Height="50" FontId="3" TabStop="yes">#(loc.InstallMessage)</Text>
 
-        <Button Name="InstallButton" X="185" Y="101" Width="-11" Height="109" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.InstallButton)</Button>
-        <Button Name="InstallCustomButton" X="185" Y="221" Width="-11" Height="59" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.InstallCustomButton)</Button>
+        <Button Name="InstallButton" X="185" Y="101" Width="-11" Height="109" TabStop="yes" FontId="3">#(loc.InstallButton)</Button>
+        <Button Name="InstallCustomButton" X="185" Y="221" Width="-11" Height="59" TabStop="yes" FontId="3">#(loc.InstallCustomButton)</Button>
 
         <Checkbox Name="InstallLauncherAllUsers" X="185" Y="-37" Width="-100" Height="24" TabStop="yes" FontId="3">#(loc.ShortInstallLauncherAllUsersLabel)</Checkbox>
         <Checkbox Name="PrependPath" X="185" Y="-13" Width="-100" Height="24" TabStop="yes" FontId="3">#(loc.ShortPrependPathLabel)</Checkbox>
@@ -35,8 +35,8 @@
 
         <Text X="185" Y="50" Width="-11" Height="50" FontId="3" TabStop="yes">#(loc.InstallUpgradeMessage)</Text>
 
-        <Button Name="InstallUpgradeButton" X="185" Y="101" Width="-11" Height="129" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.InstallUpgradeButton)</Button>
-        <Button Name="InstallUpgradeCustomButton" X="185" Y="241" Width="-11" Height="59" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.InstallUpgradeCustomButton)</Button>
+        <Button Name="InstallUpgradeButton" X="185" Y="101" Width="-11" Height="129" TabStop="yes" FontId="3">#(loc.InstallUpgradeButton)</Button>
+        <Button Name="InstallUpgradeCustomButton" X="185" Y="241" Width="-11" Height="59" TabStop="yes" FontId="3">#(loc.InstallUpgradeCustomButton)</Button>
 
         <Button Name="InstallCancelButton" X="-11" Y="-11" Width="85" Height="27" TabStop="yes" FontId="0">#(loc.CancelButton)</Button>
     </Page>
@@ -44,7 +44,7 @@
         <Text X="185" Y="11" Width="-11" Height="36" FontId="1" DisablePrefix="yes">#(loc.InstallHeader)</Text>
         <Image X="0" Y="0" Width="178" Height="382" ImageFile="SideBar.png"/>
 
-        <Button Name="InstallSimpleButton" X="185" Y="101" Width="-11" Height="129" TabStop="yes" FontId="3" HideWhenDisabled="yes" HexStyle="0xF">#(loc.InstallSimpleButton)</Button>
+        <Button Name="InstallSimpleButton" X="185" Y="101" Width="-11" Height="129" TabStop="yes" FontId="3" HideWhenDisabled="yes">#(loc.InstallSimpleButton)</Button>
 
         <Button Name="InstallCancelButton" X="-11" Y="-11" Width="85" Height="27" TabStop="yes" FontId="0">#(loc.CancelButton)</Button>
     </Page>
@@ -106,9 +106,9 @@
         <Text X="185" Y="11" Width="-11" Height="36" FontId="1" DisablePrefix="yes">#(loc.ModifyHeader)</Text>
         <Image X="0" Y="0" Width="178" Height="382" ImageFile="SideBar.png"/>
 
-        <Button Name="ModifyButton" X="185" Y="101" Width="-11" Height="59" TabStop="yes" FontId="3" HexStyle="0xF">#(loc.ModifyModifyButton)</Button>
-        <Button Name="RepairButton" X="185" Y="171" Width="-11" Height="59" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.ModifyRepairButton)</Button>
-        <Button Name="UninstallButton" X="185" Y="241" Width="-11" Height="59" TabStop="yes" FontId="3" HexStyle="0xE">#(loc.ModifyUninstallButton)</Button>
+        <Button Name="ModifyButton" X="185" Y="101" Width="-11" Height="59" TabStop="yes" FontId="3">#(loc.ModifyModifyButton)</Button>
+        <Button Name="RepairButton" X="185" Y="171" Width="-11" Height="59" TabStop="yes" FontId="3">#(loc.ModifyRepairButton)</Button>
+        <Button Name="UninstallButton" X="185" Y="241" Width="-11" Height="59" TabStop="yes" FontId="3">#(loc.ModifyUninstallButton)</Button>
 
         <Button Name="ModifyCancelButton" X="-11" Y="-11" Width="85" Height="27" TabStop="yes" FontId="0">#(loc.CancelButton)</Button>
     </Page>
@@ -118,7 +118,7 @@
 
         <Hypertext Name="SuccessText" X="205" Y="71" Width="-71" Height="150" FontId="3" DisablePrefix="yes"></Hypertext>
 
-        <Button Name="SuccessMaxPathButton" X="185" Y="-70" Width="-11" Height="81" TabStop="yes" FontId="3" HexStyle="0xE" HideWhenDisabled="yes">#(loc.SuccessMaxPathButton)</Button>
+        <Button Name="SuccessMaxPathButton" X="185" Y="-70" Width="-11" Height="81" TabStop="yes" FontId="3" HideWhenDisabled="yes">#(loc.SuccessMaxPathButton)</Button>
 
         <Text Name="SuccessRestartText" X="205" Y="-40" Width="-11" Height="34" FontId="3" HideWhenDisabled="yes" DisablePrefix="yes">#(loc.SuccessRestartText)</Text>
         <Button Name="SuccessRestartButton" X="-101" Y="-11" Width="85" Height="27" TabStop="yes" FontId="0" HideWhenDisabled="yes">#(loc.SuccessRestartButton)</Button>

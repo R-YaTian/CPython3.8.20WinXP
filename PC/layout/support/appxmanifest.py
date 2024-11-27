@@ -11,6 +11,7 @@ import ctypes
 import io
 import os
 import sys
+import platform
 
 from pathlib import Path, PureWindowsPath
 from xml.etree import ElementTree as ET
@@ -225,7 +226,11 @@ def _fixup_sccd(ns, sccd, new_hash=None):
     with open(sccd, "rb") as f:
         xml = ET.parse(f)
 
-    pfn = get_packagefamilyname(APPX_DATA["Name"], APPX_DATA["Publisher"])
+    pybits = platform.architecture()[0]
+    if pybits == '64bit':
+        pfn = get_packagefamilyname(APPX_DATA["Name"], APPX_DATA["Publisher"])
+    else:
+        pfn = os.getenv("APPX_PACKAGEFAMILYNAME")
 
     ae = xml.find("s:AuthorizedEntities", NS)
     ae.clear()

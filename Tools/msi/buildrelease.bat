@@ -71,7 +71,8 @@ if not defined BUILDX86 if not defined BUILDX64 (set BUILDX86=1) && (set BUILDX6
 if not exist "%GIT%" where git > "%TEMP%\git.loc" 2> nul && set /P GIT= < "%TEMP%\git.loc" & del "%TEMP%\git.loc"
 if not exist "%GIT%" echo Cannot find Git on PATH && exit /B 1
 
-call "%D%get_externals.bat"
+::call "%D%get_externals.bat"
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x86 -vcvars_ver=14.16
 call "%PCBUILD%find_msbuild.bat" %MSBUILD%
 if ERRORLEVEL 1 (echo Cannot locate MSBuild.exe on PATH or as MSBUILD variable & exit /b 2)
 
@@ -177,9 +178,7 @@ if "%OUTDIR_PLAT%" EQU "win32" (
 
 set BUILDOPTS=/p:Platform=%1 /p:BuildForRelease=true /p:DownloadUrl=%DOWNLOAD_URL% /p:DownloadUrlBase=%DOWNLOAD_URL_BASE% /p:ReleaseUri=%RELEASE_URI%
 if defined BUILDMSI (
-    %MSBUILD% "%D%bundle\releaselocal.wixproj" /t:Rebuild %BUILDOPTS% %CERTOPTS% /p:RebuildAll=true
-    if errorlevel 1 exit /B
-    %MSBUILD% "%D%bundle\releaseweb.wixproj" /t:Rebuild %BUILDOPTS% %CERTOPTS% /p:RebuildAll=false
+    %MSBUILD% "%D%bundle\full.wixproj" /t:Rebuild %BUILDOPTS% %CERTOPTS% /p:RebuildAll=true
     if errorlevel 1 exit /B
 )
 

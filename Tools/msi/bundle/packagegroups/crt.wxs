@@ -2,6 +2,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
     <Fragment>
         <PackageGroup Id="crt">
+            <!--
             <MsiPackage Id="ucrt_AllUsers"
                         SourceFile="ucrt.msi"
                         Compressed="$(var.CompressMSI)"
@@ -18,6 +19,7 @@
                         InstallCondition="not InstallAllUsers and not CRTInstalled and (Include_core or Include_exe or Include_pip) and not LauncherOnly">
                 <MsiProperty Name="TARGETDIR" Value="[TargetDir]" />
             </MsiPackage>
+            -->
         </PackageGroup>
     </Fragment>
 </Wix>

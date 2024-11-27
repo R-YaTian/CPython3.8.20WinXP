@@ -5,7 +5,7 @@ pushd %~dp0
 
 set this=%~n0
 
-call ..\PCbuild\find_python.bat %PYTHON%
+::call ..\PCbuild\find_python.bat %PYTHON%
 
 if not defined PYTHON set PYTHON=py
 
