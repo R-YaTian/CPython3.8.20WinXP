@@ -1,29 +1,20 @@
-// Support back to Vista
-#define _WIN32_WINNT _WIN32_WINNT_VISTA
+// Support back to XP
+#define _WIN32_WINNT _WIN32_WINNT_WINXP
+#define IDR_PYSHELLEXT 100
 #include <sdkddkver.h>
 
-// Use WRL to define a classic COM class
-#define __WRL_CLASSIC_COM__
-#include <wrl.h>
-
-#include <windows.h>
 #include <shlobj.h>
-#include <shlwapi.h>
-#include <olectl.h>
 #include <strsafe.h>
+#include <atlbase.h>
+#include <atlcom.h>
 
 #include "pyshellext_h.h"
 
-#define DDWM_UPDATEWINDOW (WM_USER+3)
-
+CComModule _Module;
 static HINSTANCE hModule;
-static CLIPFORMAT cfDropDescription;
 static CLIPFORMAT cfDragWindow;
 
 static const LPCWSTR CLASS_SUBKEY = L"Software\\Classes\\CLSID\\{BEA218D2-6950-497B-9434-61683EC065FE}";
-static const LPCWSTR DRAG_MESSAGE = L"Open with %1";
-
-using namespace Microsoft::WRL;
 
 HRESULT FilenameListCchLengthA(LPCSTR pszSource, size_t cchMax, size_t *pcchLength, size_t *pcchCount) {
     HRESULT hr = S_OK;
@@ -121,12 +112,11 @@ HRESULT FilenameListCchCopyW(STRSAFE_LPWSTR pszDest, size_t cchDest, LPCWSTR psz
     return hr;
 }
 
-
-class PyShellExt : public RuntimeClass<
-    RuntimeClassFlags<ClassicCom>,
-    IDropTarget,
-    IPersistFile
->
+class PyShellExt :
+    public CComObjectRootEx<CComSingleThreadModel>,
+    public CComCoClass<PyShellExt, &CLSID_PyShellExt>,
+    public IDropTarget,
+    public IPersistFile
 {
     LPOLESTR target, target_dir;
     DWORD target_mode;
@@ -150,43 +140,14 @@ public:
         }
     }
 
+    BEGIN_COM_MAP(PyShellExt)
+        COM_INTERFACE_ENTRY(IPersistFile)
+        COM_INTERFACE_ENTRY(IDropTarget)
+    END_COM_MAP()
+
+    DECLARE_REGISTRY_RESOURCEID(IDR_PYSHELLEXT)
+
 private:
-    HRESULT UpdateDropDescription(IDataObject *pDataObj) {
-        STGMEDIUM medium;
-        FORMATETC fmt = {
-            cfDropDescription,
-            NULL,
-            DVASPECT_CONTENT,
-            -1,
-            TYMED_HGLOBAL
-        };
-
-        auto hr = pDataObj->GetData(&fmt, &medium);
-        if (FAILED(hr)) {
-            OutputDebugString(L"PyShellExt::UpdateDropDescription - failed to get DROPDESCRIPTION format");
-            return hr;
-        }
-        if (!medium.hGlobal) {
-            OutputDebugString(L"PyShellExt::UpdateDropDescription - DROPDESCRIPTION format had NULL hGlobal");
-            ReleaseStgMedium(&medium);
-            return E_FAIL;
-        }
-        auto dd = (DROPDESCRIPTION*)GlobalLock(medium.hGlobal);
-        if (!dd) {
-            OutputDebugString(L"PyShellExt::UpdateDropDescription - failed to lock DROPDESCRIPTION hGlobal");
-            ReleaseStgMedium(&medium);
-            return E_FAIL;
-        }
-        StringCchCopy(dd->szMessage, sizeof(dd->szMessage) / sizeof(dd->szMessage[0]), DRAG_MESSAGE);
-        StringCchCopy(dd->szInsert, sizeof(dd->szInsert) / sizeof(dd->szInsert[0]), PathFindFileNameW(target));
-        dd->type = DROPIMAGE_MOVE;
-
-        GlobalUnlock(medium.hGlobal);
-        ReleaseStgMedium(&medium);
-
-        return S_OK;
-    }
-
     HRESULT GetDragWindow(IDataObject *pDataObj, HWND *phWnd) {
         HRESULT hr;
         HWND *pMem;
@@ -310,23 +271,6 @@ private:
         return hr;
     }
 
-    HRESULT NotifyDragWindow(HWND hwnd) {
-        LRESULT res;
-
-        if (!hwnd) {
-            return S_FALSE;
-        }
-
-        res = SendMessage(hwnd, DDWM_UPDATEWINDOW, 0, NULL);
-
-        if (res) {
-            OutputDebugString(L"PyShellExt::NotifyDragWindow - failed to post DDWM_UPDATEWINDOW");
-            return E_FAIL;
-        }
-
-        return S_OK;
-    }
-
 public:
     // IDropTarget implementation
 
@@ -340,14 +284,8 @@ public:
 
         *pdwEffect = DROPEFFECT_MOVE;
 
-        if (FAILED(UpdateDropDescription(data_obj))) {
-            OutputDebugString(L"PyShellExt::DragEnter - failed to update drop description");
-        }
         if (FAILED(GetDragWindow(data_obj, &hwnd))) {
             OutputDebugString(L"PyShellExt::DragEnter - failed to get drag window");
-        }
-        if (FAILED(NotifyDragWindow(hwnd))) {
-            OutputDebugString(L"PyShellExt::DragEnter - failed to notify drag window");
         }
 
         return S_OK;
@@ -488,14 +426,12 @@ public:
     }
 };
 
-CoCreatableClass(PyShellExt);
-
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, _COM_Outptr_ void** ppv) {
-    return Module<InProc>::GetModule().GetClassObject(rclsid, riid, ppv);
+    return _Module.GetClassObject(rclsid, riid, ppv);
 }
 
 STDAPI DllCanUnloadNow() {
-    return Module<InProc>::GetModule().Terminate() ? S_OK : S_FALSE;
+    return (_Module.DllCanUnloadNow() == S_OK && _Module.GetLockCount() == 0) ? S_OK : S_FALSE;
 }
 
 STDAPI DllRegisterServer() {
@@ -568,13 +504,13 @@ STDAPI DllRegisterServer() {
 STDAPI DllUnregisterServer() {
     LONG res_lm, res_cu;
 
-    res_lm = RegDeleteTree(HKEY_LOCAL_MACHINE, CLASS_SUBKEY);
+    res_lm = SHDeleteKeyW(HKEY_LOCAL_MACHINE, CLASS_SUBKEY);
     if (res_lm != ERROR_SUCCESS && res_lm != ERROR_FILE_NOT_FOUND) {
         OutputDebugString(L"PyShellExt::DllUnregisterServer - failed to delete per-machine registration");
         return SELFREG_E_CLASS;
     }
 
-    res_cu = RegDeleteTree(HKEY_CURRENT_USER, CLASS_SUBKEY);
+    res_cu = SHDeleteKeyW(HKEY_CURRENT_USER, CLASS_SUBKEY);
     if (res_cu != ERROR_SUCCESS && res_cu != ERROR_FILE_NOT_FOUND) {
         OutputDebugString(L"PyShellExt::DllUnregisterServer - failed to delete per-user registration");
         return SELFREG_E_CLASS;
@@ -591,14 +527,15 @@ STDAPI DllUnregisterServer() {
     return S_OK;
 }
 
+BEGIN_OBJECT_MAP(ObjectMap)
+    OBJECT_ENTRY(CLSID_PyShellExt, PyShellExt)
+END_OBJECT_MAP()
+
 STDAPI_(BOOL) DllMain(_In_opt_ HINSTANCE hinst, DWORD reason, _In_opt_ void*) {
     if (reason == DLL_PROCESS_ATTACH) {
         hModule = hinst;
+        _Module.Init(ObjectMap, hModule, NULL);
 
-        cfDropDescription = RegisterClipboardFormat(CFSTR_DROPDESCRIPTION);
-        if (!cfDropDescription) {
-            OutputDebugString(L"PyShellExt::DllMain - failed to get CFSTR_DROPDESCRIPTION format");
-        }
         cfDragWindow = RegisterClipboardFormat(L"DragWindow");
         if (!cfDragWindow) {
             OutputDebugString(L"PyShellExt::DllMain - failed to get DragWindow format");

@@ -1,6 +1,7 @@
 #include "Python.h"
 #ifdef MS_WINDOWS
 #include <winsock2.h>         /* struct timeval */
+#include "VersionHelpers.h"
 #endif
 
 #if defined(__APPLE__)
@@ -765,29 +766,62 @@ static int
 pymonotonic(_PyTime_t *tp, _Py_clock_info_t *info, int raise)
 {
 #if defined(MS_WINDOWS)
+    static ULONGLONG(*GetTickCount64) (void) = NULL;
+    static ULONGLONG(CALLBACK * Py_GetTickCount64)(void);
+    static int has_getickcount64 = -1;
+    static DWORD last_ticks = 0;
+    static DWORD n_overflow = 0;
     ULONGLONG ticks;
+    DWORD ticks32;
+    double result32;
     _PyTime_t t;
 
-    assert(info == NULL || raise);
+    if (has_getickcount64 == -1) {
+        /* GetTickCount64() was added to Windows Vista */
+        if (IsWindowsVersionOrGreater(6, 0, 0)) {
+            HINSTANCE hKernel32;
+            hKernel32 = GetModuleHandleW(L"KERNEL32");
+            *(FARPROC*)&Py_GetTickCount64 = GetProcAddress(hKernel32, "GetTickCount64");
+            has_getickcount64 = (Py_GetTickCount64 != NULL);
+        } else
+            has_getickcount64 = 0;
+    }
 
-    ticks = GetTickCount64();
-    Py_BUILD_ASSERT(sizeof(ticks) <= sizeof(_PyTime_t));
-    t = (_PyTime_t)ticks;
+    if (has_getickcount64)
+    {
+        assert(info == NULL || raise);
 
-    if (_PyTime_check_mul_overflow(t, MS_TO_NS)) {
-        if (raise) {
-            _PyTime_overflow();
-            return -1;
+        ticks = Py_GetTickCount64();
+        Py_BUILD_ASSERT(sizeof(ticks) <= sizeof(_PyTime_t));
+        t = (_PyTime_t)ticks;
+
+        if (_PyTime_check_mul_overflow(t, MS_TO_NS)) {
+            if (raise) {
+                _PyTime_overflow();
+                return -1;
+            }
+            /* Hello, time traveler! */
+            Py_UNREACHABLE();
         }
-        /* Hello, time traveler! */
-        Py_UNREACHABLE();
+    } else {
+        ticks32 = GetTickCount();
+        if (ticks32 < last_ticks)
+            n_overflow++;
+        last_ticks = ticks32;
+
+        result32 = ldexp(n_overflow, 32);
+        result32 += ticks32;
+        t = (_PyTime_t)result32;
     }
     *tp = t * MS_TO_NS;
 
     if (info) {
         DWORD timeAdjustment, timeIncrement;
         BOOL isTimeAdjustmentDisabled, ok;
-        info->implementation = "GetTickCount64()";
+        if (has_getickcount64)
+            info->implementation = "GetTickCount64()";
+        else
+            info->implementation = "GetTickCount()";
         info->monotonic = 1;
         ok = GetSystemTimeAdjustment(&timeAdjustment, &timeIncrement,
                                      &isTimeAdjustmentDisabled);

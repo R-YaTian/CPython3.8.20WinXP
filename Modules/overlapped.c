@@ -673,6 +673,35 @@ Overlapped_dealloc(OverlappedObject *self)
     SetLastError(olderr);
 }
 
+#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+/* inet_ntop impl for Windows XP */
+
+static const char* inet_ntop(int af, const void *src, char *dst, socklen_t size)
+{
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    addr.ss_family = af;
+    if (af == AF_INET6) {
+        struct sockaddr_in6* sa6 = (struct sockaddr_in6*)&addr;
+        memcpy(&(sa6->sin6_addr.s6_addr), src, sizeof(sa6->sin6_addr.s6_addr));
+        addrlen = sizeof(struct sockaddr_in6);
+    } else if (af == AF_INET) {
+        struct sockaddr_in* sa4 = (struct sockaddr_in*)&addr;
+        if (size < 16)
+            /* Should set errno to ENOSPC. */
+            return NULL;
+        memcpy(&(sa4->sin_addr.s_addr), src, sizeof(sa4->sin_addr.s_addr));
+        addrlen = sizeof(struct sockaddr_in);
+    } else
+        return NULL;
+
+    if (WSAAddressToStringA((struct sockaddr*)&addr, addrlen, 0, dst, (LPDWORD) &size) != 0)
+        return NULL;
+
+    return dst;
+}
+#endif
 
 /* Convert IPv4 sockaddr to a Python str. */
 

@@ -12,10 +12,16 @@
     <ClInclude Include="..\Modules\socketmodule.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Modules\impl_iphlpapi.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Modules\socketmodule.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\PC\python_nt.rc" />
   </ItemGroup>
 </Project>

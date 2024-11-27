@@ -72,11 +72,18 @@
     <Keyword>Win32Proj</Keyword>
     <TargetName>python3</TargetName>
     <SupportPGO>false</SupportPGO>
+    <WindowsTargetPlatformVersion>$(DefaultWindowsSDKVersion)</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="python.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <PlatformToolset>v141_xp</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <PlatformToolset>v141_xp</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -122,7 +129,6 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-  
   <Target Name="BuildPython3_dDef" BeforeTargets="BuildStubDef" Condition="$(Configuration) == 'Debug'">
     <ItemGroup>
       <_DefLines Remove="@(_DefLines)" />
@@ -148,10 +154,8 @@
     </ItemGroup>
     <MakeDir Directories="$(IntDir)" />
     <Message Text="Updating python3_d.def" Condition="@(_Lines->'%(New)') != @(_OriginalLines)" Importance="high" />
-    <WriteLinesToFile File="$(IntDir)python3_d.def" Lines="@(_Lines->'%(New)')" Overwrite="true"
-                      Condition="@(_Lines->'%(New)') != @(_OriginalLines)" />
+    <WriteLinesToFile File="$(IntDir)python3_d.def" Lines="@(_Lines->'%(New)')" Overwrite="true" Condition="@(_Lines->'%(New)') != @(_OriginalLines)" />
   </Target>
-  
   <Target Name="BuildStubDef" BeforeTargets="PreLinkEvent">
     <ItemGroup>
       <_DefLines Remove="@(_DefLines)" />
@@ -177,7 +181,6 @@
     </ItemGroup>
     <MakeDir Directories="$(IntDir)" />
     <Message Text="Updating python3stub.def" Condition="@(_Lines) != @(_OriginalLines)" Importance="high" />
-    <WriteLinesToFile File="$(IntDir)python3stub.def" Lines="@(_Lines)" Overwrite="true"
-                      Condition="@(_Lines) != @(_OriginalLines)" />
+    <WriteLinesToFile File="$(IntDir)python3stub.def" Lines="@(_Lines)" Overwrite="true" Condition="@(_Lines) != @(_OriginalLines)" />
   </Target>
 </Project>

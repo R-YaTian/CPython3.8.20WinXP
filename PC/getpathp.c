@@ -259,8 +259,7 @@ static void
 join(wchar_t *buffer, const wchar_t *stuff)
 {
     if (_PathCchCombineEx_Initialized == 0) {
-        HMODULE pathapi = LoadLibraryExW(L"api-ms-win-core-path-l1-1-0.dll", NULL,
-                                         LOAD_LIBRARY_SEARCH_SYSTEM32);
+        HMODULE pathapi = LoadLibraryExW(L"api-ms-win-core-path-l1-1-0.dll", NULL, 0);
         if (pathapi) {
             _PathCchCombineEx = (PPathCchCombineEx)GetProcAddress(pathapi, "PathCchCombineEx");
         }
@@ -296,8 +295,7 @@ canonicalize(wchar_t *buffer, const wchar_t *path)
     }
 
     if (_PathCchCanonicalizeEx_Initialized == 0) {
-        HMODULE pathapi = LoadLibraryExW(L"api-ms-win-core-path-l1-1-0.dll", NULL,
-                                         LOAD_LIBRARY_SEARCH_SYSTEM32);
+        HMODULE pathapi = LoadLibraryExW(L"api-ms-win-core-path-l1-1-0.dll", NULL, 0);
         if (pathapi) {
             _PathCchCanonicalizeEx = (PPathCchCanonicalizeEx)GetProcAddress(pathapi, "PathCchCanonicalizeEx");
         }
@@ -1152,7 +1150,7 @@ _Py_CheckPython3(void)
     if (!get_dllpath(py3path)) {
         reduce(py3path);
         join(py3path, PY3_DLLNAME);
-        hPython3 = LoadLibraryExW(py3path, NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        hPython3 = LoadLibraryExW(py3path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (hPython3 != NULL) {
             return 1;
         }
@@ -1160,7 +1158,7 @@ _Py_CheckPython3(void)
 
     /* If we can locate python3.dll in our application dir,
        use that DLL */
-    hPython3 = LoadLibraryExW(PY3_DLLNAME, NULL, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+    hPython3 = LoadLibraryExW(PY3_DLLNAME, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (hPython3 != NULL) {
         return 1;
     }
@@ -1170,7 +1168,7 @@ _Py_CheckPython3(void)
     wcscpy(py3path, Py_GetPrefix());
     if (py3path[0]) {
         join(py3path, L"DLLs\\" PY3_DLLNAME);
-        hPython3 = LoadLibraryExW(py3path, NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        hPython3 = LoadLibraryExW(py3path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
     return hPython3 != NULL;
 }

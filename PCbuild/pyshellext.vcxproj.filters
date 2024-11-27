@@ -36,5 +36,8 @@
     <None Include="..\PC\pyshellext_d.def">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="..\PC\pyshellext.rgs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

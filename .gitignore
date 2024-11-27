@@ -133,6 +133,7 @@ Tools/ssl/win32
 *.obj
 *.tlog
 *.log
+*.aps
 
 # Build results
 [Dd]ebug/

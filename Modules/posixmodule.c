@@ -1684,16 +1684,45 @@ attributes_from_dir(LPCWSTR pszFile, BY_HANDLE_FILE_INFORMATION *info, ULONG *re
     return TRUE;
 }
 
+/* Grab GetFinalPathNameByHandle dynamically from kernel32 */
+static int has_GetFinalPathNameByHandle = -1;
+static DWORD(CALLBACK* Py_GetFinalPathNameByHandleW)(HANDLE, LPWSTR, DWORD, DWORD);
+static int
+check_GetFinalPathNameByHandle()
+{
+    HINSTANCE hKernel32;
+    DWORD(CALLBACK * Py_GetFinalPathNameByHandleA)(HANDLE, LPSTR, DWORD,
+        DWORD);
+    /* only recheck */
+    if (-1 == has_GetFinalPathNameByHandle)
+    {
+        hKernel32 = GetModuleHandleW(L"KERNEL32");
+        *(FARPROC*)&Py_GetFinalPathNameByHandleA = GetProcAddress(hKernel32,
+            "GetFinalPathNameByHandleA");
+        *(FARPROC*)&Py_GetFinalPathNameByHandleW = GetProcAddress(hKernel32,
+            "GetFinalPathNameByHandleW");
+        has_GetFinalPathNameByHandle = Py_GetFinalPathNameByHandleA &&
+            Py_GetFinalPathNameByHandleW;
+    }
+    return has_GetFinalPathNameByHandle;
+}
+
 static int
 win32_xstat_impl(const wchar_t *path, struct _Py_stat_struct *result,
                  BOOL traverse)
 {
     HANDLE hFile;
     BY_HANDLE_FILE_INFORMATION fileInfo;
-    FILE_ATTRIBUTE_TAG_INFO tagInfo = { 0 };
+    ULONG reparse_tag = 0;
     DWORD fileType, error;
     BOOL isUnhandledTag = FALSE;
     int retval = 0;
+
+    if (!check_GetFinalPathNameByHandle()) {
+        /* If the OS doesn't have GetFinalPathNameByHandle, don't
+           traverse reparse point. */
+        traverse = FALSE;
+    }
 
     DWORD access = FILE_READ_ATTRIBUTES;
     DWORD flags = FILE_FLAG_BACKUP_SEMANTICS; /* Allow opening directories. */
@@ -1709,14 +1738,14 @@ win32_xstat_impl(const wchar_t *path, struct _Py_stat_struct *result,
         case ERROR_ACCESS_DENIED:     /* Cannot sync or read attributes. */
         case ERROR_SHARING_VIOLATION: /* It's a paging file. */
             /* Try reading the parent directory. */
-            if (!attributes_from_dir(path, &fileInfo, &tagInfo.ReparseTag)) {
+            if (!attributes_from_dir(path, &fileInfo, &reparse_tag)) {
                 /* Cannot read the parent directory. */
                 SetLastError(error);
                 return -1;
             }
             if (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
                 if (traverse ||
-                    !IsReparseTagNameSurrogate(tagInfo.ReparseTag)) {
+                    !IsReparseTagNameSurrogate(reparse_tag)) {
                     /* The stat call has to traverse but cannot, so fail. */
                     SetLastError(error);
                     return -1;
@@ -1781,23 +1810,22 @@ win32_xstat_impl(const wchar_t *path, struct _Py_stat_struct *result,
 
         /* Query the reparse tag, and traverse a non-link. */
         if (!traverse) {
-            if (!GetFileInformationByHandleEx(hFile, FileAttributeTagInfo,
-                    &tagInfo, sizeof(tagInfo))) {
+            if (!GetFileInformationByHandle(hFile, &fileInfo)) {
                 /* Allow devices that do not support FileAttributeTagInfo. */
                 switch (GetLastError()) {
                 case ERROR_INVALID_PARAMETER:
                 case ERROR_INVALID_FUNCTION:
                 case ERROR_NOT_SUPPORTED:
-                    tagInfo.FileAttributes = FILE_ATTRIBUTE_NORMAL;
-                    tagInfo.ReparseTag = 0;
+                    fileInfo.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+                    reparse_tag = 0;
                     break;
                 default:
                     retval = -1;
                     goto cleanup;
                 }
-            } else if (tagInfo.FileAttributes &
+            } else if (fileInfo.dwFileAttributes &
                          FILE_ATTRIBUTE_REPARSE_POINT) {
-                if (IsReparseTagNameSurrogate(tagInfo.ReparseTag)) {
+                if (IsReparseTagNameSurrogate(reparse_tag)) {
                     if (isUnhandledTag) {
                         /* Traversing previously failed for either this link
                            or its target. */
@@ -1830,7 +1858,7 @@ win32_xstat_impl(const wchar_t *path, struct _Py_stat_struct *result,
         }
     }
 
-    _Py_attribute_data_to_stat(&fileInfo, tagInfo.ReparseTag, result);
+    _Py_attribute_data_to_stat(&fileInfo, reparse_tag, result);
 
     if (!(fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
         /* Fix the file execute permissions. This hack sets S_IEXEC if
@@ -3965,6 +3993,13 @@ os__getfinalpathname_impl(PyObject *module, path_t *path)
     int result_length;
     PyObject *result;
 
+    if (!check_GetFinalPathNameByHandle()) {
+        /* If the OS doesn't have GetFinalPathNameByHandle, return a
+           NotImplementedError. */
+        return PyErr_Format(PyExc_NotImplementedError,
+            "GetFinalPathNameByHandle not available on this platform");
+    }
+
     Py_BEGIN_ALLOW_THREADS
     hFile = CreateFileW(
         path->wide,
@@ -3985,8 +4020,8 @@ os__getfinalpathname_impl(PyObject *module, path_t *path)
        target path name. */
     while (1) {
         Py_BEGIN_ALLOW_THREADS
-        result_length = GetFinalPathNameByHandleW(hFile, target_path,
-                                                  buf_size, VOLUME_NAME_DOS);
+        result_length = Py_GetFinalPathNameByHandleW(hFile, target_path,
+                                                     buf_size, VOLUME_NAME_DOS);
         Py_END_ALLOW_THREADS
 
         if (!result_length) {
@@ -8133,6 +8168,22 @@ os_readlink_impl(PyObject *module, path_t *path, int dir_fd)
 
 #if defined(MS_WINDOWS)
 
+/* Grab CreateSymbolicLinkW dynamically from kernel32 */
+static BOOLEAN(CALLBACK* Py_CreateSymbolicLinkW)(LPCWSTR, LPCWSTR, DWORD) = NULL;
+
+static int
+check_CreateSymbolicLink(void)
+{
+    HINSTANCE hKernel32;
+    /* only recheck */
+    if (Py_CreateSymbolicLinkW)
+        return 1;
+    hKernel32 = GetModuleHandleW(L"KERNEL32");
+    *(FARPROC*)&Py_CreateSymbolicLinkW = GetProcAddress(hKernel32,
+        "CreateSymbolicLinkW");
+    return Py_CreateSymbolicLinkW != NULL;
+}
+
 /* Remove the last portion of the path - return 0 on success */
 static int
 _dirnameW(WCHAR *path)
@@ -8246,6 +8297,12 @@ os_symlink_impl(PyObject *module, path_t *src, path_t *dst,
 
     /* Assumed true, set to false if detected to not be available. */
     static int windows_has_symlink_unprivileged_flag = TRUE;
+
+    if (!check_CreateSymbolicLink()) {
+        PyErr_SetString(PyExc_NotImplementedError,
+            "CreateSymbolicLink functions not found");
+        return NULL;
+    }
 #else
     int result;
 #endif
@@ -8266,10 +8323,9 @@ os_symlink_impl(PyObject *module, path_t *src, path_t *dst,
     _Py_BEGIN_SUPPRESS_IPH
     /* if src is a directory, ensure flags==1 (target_is_directory bit) */
     if (target_is_directory || _check_dirW(src->wide, dst->wide)) {
-        flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+        flags |= 0x1; // SYMBOLIC_LINK_FLAG_DIRECTORY
     }
-
-    result = CreateSymbolicLinkW(dst->wide, src->wide, flags);
+    result = Py_CreateSymbolicLinkW(dst->wide, src->wide, flags);
     _Py_END_SUPPRESS_IPH
     Py_END_ALLOW_THREADS
 
@@ -8289,7 +8345,7 @@ os_symlink_impl(PyObject *module, path_t *src, path_t *dst,
         calls to CreateSymbolicLink.
         */
         flags &= ~(SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE);
-        result = CreateSymbolicLinkW(dst->wide, src->wide, flags);
+        result = Py_CreateSymbolicLinkW(dst->wide, src->wide, flags);
         _Py_END_SUPPRESS_IPH
         Py_END_ALLOW_THREADS
 
@@ -12499,9 +12555,21 @@ os_cpu_count_impl(PyObject *module)
 {
     int ncpu = 0;
 #ifdef MS_WINDOWS
-    /* Declare prototype here to avoid pulling in all of the Win7 APIs in 3.8 */
-    DWORD WINAPI GetActiveProcessorCount(WORD group);
-    ncpu = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    /* Vista and/or XP are supported and the GetActiveProcessorCount API is Win7+
+       Need to fallback to old behavior if this call isn't present */
+    HINSTANCE hKernel32;
+    hKernel32 = GetModuleHandleW(L"KERNEL32");
+
+    static DWORD(CALLBACK *_GetActiveProcessorCount)(WORD) = NULL;
+    *(FARPROC*)&_GetActiveProcessorCount = GetProcAddress(hKernel32,
+        "GetActiveProcessorCount");
+    if (_GetActiveProcessorCount != NULL) {
+        ncpu = _GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    } else {
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        ncpu = sysinfo.dwNumberOfProcessors;
+    }
 #elif defined(__hpux)
     ncpu = mpctl(MPC_GETNUMSPUS, NULL, NULL);
 #elif defined(HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
@@ -13732,6 +13800,7 @@ error:
  * on win32
  */
 
+typedef PVOID DLL_DIRECTORY_COOKIE, *PDLL_DIRECTORY_COOKIE;
 typedef DLL_DIRECTORY_COOKIE (WINAPI *PAddDllDirectory)(PCWSTR newDirectory);
 typedef BOOL (WINAPI *PRemoveDllDirectory)(DLL_DIRECTORY_COOKIE cookie);
 
@@ -14532,6 +14601,12 @@ all_ins(PyObject *m)
 #endif
 
 #ifdef MS_WINDOWS
+#define LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR    0x00000100
+#define LOAD_LIBRARY_SEARCH_APPLICATION_DIR 0x00000200
+#define LOAD_LIBRARY_SEARCH_USER_DIRS       0x00000400
+#define LOAD_LIBRARY_SEARCH_SYSTEM32        0x00000800
+#define LOAD_LIBRARY_SEARCH_DEFAULT_DIRS    0x00001000
+    if (PyModule_AddIntConstant(m, "_LOAD_WITH_ALTERED_SEARCH_PATH", LOAD_WITH_ALTERED_SEARCH_PATH)) return -1;
     if (PyModule_AddIntConstant(m, "_LOAD_LIBRARY_SEARCH_DEFAULT_DIRS", LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)) return -1;
     if (PyModule_AddIntConstant(m, "_LOAD_LIBRARY_SEARCH_APPLICATION_DIR", LOAD_LIBRARY_SEARCH_APPLICATION_DIR)) return -1;
     if (PyModule_AddIntConstant(m, "_LOAD_LIBRARY_SEARCH_SYSTEM32", LOAD_LIBRARY_SEARCH_SYSTEM32)) return -1;

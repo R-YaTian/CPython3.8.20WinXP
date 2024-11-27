@@ -359,10 +359,11 @@ class CDLL(object):
                 mode = winmode
             else:
                 import nt
-                mode = nt._LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+                if _sys.getwindowsversion()[:2] >= (6, 2):
+                    mode = nt._LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
                 if '/' in name or '\\' in name:
                     self._name = nt._getfullpathname(self._name)
-                    mode |= nt._LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+                    mode = nt._LOAD_WITH_ALTERED_SEARCH_PATH
 
         class _FuncPtr(_CFuncPtr):
             _flags_ = flags

@@ -331,22 +331,23 @@ http://cvsweb.netbsd.org/bsdweb.cgi/src/lib/libc/net/getaddrinfo.c.diff?r1=1.82&
 #define IPPROTO_ICMPV6 IPPROTO_ICMPV6
 #define IPPROTO_NONE IPPROTO_NONE
 #define IPPROTO_DSTOPTS IPPROTO_DSTOPTS
-#define IPPROTO_EGP IPPROTO_EGP
-#define IPPROTO_PIM IPPROTO_PIM
+#define IPPROTO_EGP 8
+#define IPPROTO_PIM 103
 #define IPPROTO_ICLFXBM IPPROTO_ICLFXBM  // WinSock2 only
-#define IPPROTO_ST IPPROTO_ST  // WinSock2 only
-#define IPPROTO_CBT IPPROTO_CBT  // WinSock2 only
-#define IPPROTO_IGP IPPROTO_IGP  // WinSock2 only
-#define IPPROTO_RDP IPPROTO_RDP  // WinSock2 only
-#define IPPROTO_PGM IPPROTO_PGM  // WinSock2 only
-#define IPPROTO_L2TP IPPROTO_L2TP  // WinSock2 only
-#define IPPROTO_SCTP IPPROTO_SCTP  // WinSock2 only
+#define IPPROTO_ST 5  // WinSock2 only
+#define IPPROTO_CBT 7  // WinSock2 only
+#define IPPROTO_IGP 9  // WinSock2 only
+#define IPPROTO_RDP 27  // WinSock2 only
+#define IPPROTO_PGM 113  // WinSock2 only
+#define IPPROTO_L2TP 115  // WinSock2 only
+#define IPPROTO_SCTP 132  // WinSock2 only
 #endif /* MS_WINDOWS */
 
 /* Provides the IsWindows7SP1OrGreater() function */
-#include <versionhelpers.h>
+#include "VersionHelpers.h"
 // For if_nametoindex() and if_indextoname()
 #include <iphlpapi.h>
+#include "impl_iphlpapi.h"
 
 /* remove some flags on older version Windows during run-time.
    https://msdn.microsoft.com/en-us/library/windows/desktop/ms738596.aspx */
@@ -436,6 +437,13 @@ remove_unusable_flags(PyObject *m)
    */
 #else
 #  include "addrinfo.h"
+#endif
+
+#ifdef HAVE_INET_PTON
+#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+int inet_pton(int af, const char *src, void *dst);
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
+#endif
 #endif
 
 #ifdef __APPLE__
@@ -6695,7 +6703,8 @@ socket_if_nameindex(PyObject *self, PyObject *arg)
 #ifdef MS_WINDOWS
     PMIB_IF_TABLE2 tbl;
     int ret;
-    if ((ret = GetIfTable2Ex(MibIfTableRaw, &tbl)) != NO_ERROR) {
+    ret = IsWindowsVistaOrGreater() ? GetIfTable2Ex(MibIfTableRaw, &tbl) : GetIfTable2ExDownlevel(MibIfTableRaw, &tbl);
+    if (ret != NO_ERROR) {
         Py_DECREF(list);
         // ret is used instead of GetLastError()
         return PyErr_SetFromWindowsErr(ret);
@@ -6703,10 +6712,14 @@ socket_if_nameindex(PyObject *self, PyObject *arg)
     for (ULONG i = 0; i < tbl->NumEntries; ++i) {
         MIB_IF_ROW2 r = tbl->Table[i];
         WCHAR buf[NDIS_IF_MAX_STRING_SIZE + 1];
-        if ((ret = ConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf,
-                                               Py_ARRAY_LENGTH(buf)))) {
+        ret = IsWindowsVistaOrGreater() ? ConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf, Py_ARRAY_LENGTH(buf)) :
+            WineConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf, Py_ARRAY_LENGTH(buf));
+        if (ret) {
             Py_DECREF(list);
-            FreeMibTable(tbl);
+            if (IsWindowsVistaOrGreater())
+                FreeMibTable(tbl);
+            else
+                FreeMibTableImpl(tbl);
             // ret is used instead of GetLastError()
             return PyErr_SetFromWindowsErr(ret);
         }
@@ -6784,7 +6797,7 @@ socket_if_nametoindex(PyObject *self, PyObject *args)
                           PyUnicode_FSConverter, &oname))
         return NULL;
 
-    index = if_nametoindex(PyBytes_AS_STRING(oname));
+    index = IsWindowsVistaOrGreater() ? if_nametoindex(PyBytes_AS_STRING(oname)) : IPHLP_if_nametoindex(PyBytes_AS_STRING(oname));
     Py_DECREF(oname);
     if (index == 0) {
         /* if_nametoindex() doesn't set errno */
@@ -6820,7 +6833,10 @@ socket_if_indextoname(PyObject *self, PyObject *arg)
     }
 
     char name[IF_NAMESIZE + 1];
-    if (if_indextoname(index, name) == NULL) {
+    if (IsWindowsVistaOrGreater() && if_indextoname(index, name) == NULL) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    } else if (IPHLP_if_indextoname(index, name) == NULL) {
         PyErr_SetFromErrno(PyExc_OSError);
         return NULL;
     }
@@ -8309,3 +8325,58 @@ PyInit__socket(void)
 
     return m;
 }
+
+#ifdef HAVE_INET_PTON
+#if !defined(NTDDI_VERSION) || (NTDDI_VERSION < NTDDI_LONGHORN)
+int inet_pton(int af, const char *src, void *dst)
+{
+    struct sockaddr_storage ss;
+    int size = sizeof(ss);
+    char src_copy[INET6_ADDRSTRLEN + 1];
+
+    ZeroMemory(&ss, sizeof(ss));
+    /* stupid non-const API */
+    strncpy(src_copy, src, INET6_ADDRSTRLEN + 1);
+    src_copy[INET6_ADDRSTRLEN] = 0;
+
+    if (WSAStringToAddressA(src_copy, af, 0, (struct sockaddr*) &ss, &size) == 0) {
+        switch (af) {
+        case AF_INET:
+            *(struct in_addr*) dst = ((struct sockaddr_in*)&ss)->sin_addr;
+            return 1;
+        case AF_INET6:
+            *(struct in6_addr*) dst = ((struct sockaddr_in6*)&ss)->sin6_addr;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+const char* inet_ntop(int af, const void *src, char *dst, socklen_t size)
+{
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    addr.ss_family = af;
+    if (af == AF_INET6) {
+        struct sockaddr_in6* sa6 = (struct sockaddr_in6*)&addr;
+        memcpy(&(sa6->sin6_addr.s6_addr), src, sizeof(sa6->sin6_addr.s6_addr));
+        addrlen = sizeof(struct sockaddr_in6);
+    } else if (af == AF_INET) {
+        struct sockaddr_in* sa4 = (struct sockaddr_in*)&addr;
+        if (size < 16)
+            /* Should set errno to ENOSPC. */
+            return NULL;
+        memcpy(&(sa4->sin_addr.s_addr), src, sizeof(sa4->sin_addr.s_addr));
+        addrlen = sizeof(struct sockaddr_in);
+    } else
+        return NULL;
+
+    if (WSAAddressToStringA((struct sockaddr*)&addr, addrlen, 0, dst, (LPDWORD) &size) != 0)
+        return NULL;
+
+    return dst;
+}
+#endif
+#endif

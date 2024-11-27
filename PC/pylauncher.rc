@@ -2,11 +2,6 @@
 
 #include "python_ver_rc.h"
 
-// Include the manifest file that indicates we support all
-// current versions of Windows.
-#include <winuser.h>
-1 RT_MANIFEST "python.manifest"
-
 #if defined(PY_ICON)
 1 ICON DISCARDABLE "icons\python.ico"
 #elif defined(PYW_ICON)

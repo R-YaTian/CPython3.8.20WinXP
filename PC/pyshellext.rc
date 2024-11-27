@@ -2,11 +2,6 @@
 
 #include "python_ver_rc.h"
 
-// Include the manifest file that indicates we support all
-// current versions of Windows.
-#include <winuser.h>
-1 RT_MANIFEST "python.manifest"
-
 /////////////////////////////////////////////////////////////////////////////
 //
 // Version
@@ -22,7 +17,7 @@ VS_VERSION_INFO VERSIONINFO
  FILEFLAGS 0x0L
 #endif
  FILEOS VOS__WINDOWS32
- FILETYPE VFT_APP
+ FILETYPE VFT_DLL
  FILESUBTYPE 0x0L
 BEGIN
     BLOCK "StringFileInfo"
@@ -44,3 +39,5 @@ BEGIN
         VALUE "Translation", 0x0, 1200
     END
 END
+
+IDR_PYSHELLEXT        REGISTRY DISCARDABLE    "pyshellext.rgs"

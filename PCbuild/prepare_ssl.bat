@@ -31,7 +31,7 @@ if "%~1"=="--certificate" (set SigningCertificate=%~2) && shift && shift & goto 
 if "%~1"=="-c" (set SigningCertificate=%~2) && shift && shift & goto CheckOpts
 if "%~1"=="--organization" (set ORG_SETTING=--organization "%~2") && shift && shift && goto CheckOpts
 
-if "%~1"=="" goto Build
+if "%~1"=="" goto Build1
 echo Unrecognized option: %1
 goto Usage
 
@@ -44,15 +44,16 @@ if ERRORLEVEL 1 (echo Cannot locate python.exe on PATH or as PYTHON variable & e
 
 call "%PCBUILD%\get_externals.bat" --openssl-src --no-openssl %ORG_SETTING%
 
+:Build1
 if "%PERL%" == "" where perl > "%TEMP%\perl.loc" 2> nul && set /P PERL= <"%TEMP%\perl.loc" & del "%TEMP%\perl.loc"
 if "%PERL%" == "" (echo Cannot locate perl.exe on PATH or as PERL variable & exit /b 4)
 
 %MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=Win32
 if errorlevel 1 exit /b
-%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=x64
-if errorlevel 1 exit /b
-%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=ARM
-if errorlevel 1 exit /b
-%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=ARM64
-if errorlevel 1 exit /b
+::%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=x64
+::if errorlevel 1 exit /b
+::%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=ARM
+::if errorlevel 1 exit /b
+::%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=ARM64
+::if errorlevel 1 exit /b
 
