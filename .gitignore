@@ -134,8 +134,10 @@ Tools/ssl/win32
 *.tlog
 *.log
 *.aps
+versions.vc
 
 # Build results
 [Dd]ebug/
 [Rr]elease/
 [Rr]eleases/
+Release_VC*/
