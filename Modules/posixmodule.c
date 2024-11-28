@@ -4228,6 +4228,10 @@ os_mkdir_impl(PyObject *module, path_t *path, int mode, int dir_fd)
             LocalFree(secAttr.lpSecurityDescriptor)) {
             error = GetLastError();
         }
+    } else {
+        result = CreateDirectoryW(path->wide, NULL);
+        if (secAttr.lpSecurityDescriptor) LocalFree(secAttr.lpSecurityDescriptor);
+        error = 0;
     }
     Py_END_ALLOW_THREADS
 

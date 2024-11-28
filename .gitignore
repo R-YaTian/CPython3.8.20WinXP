@@ -112,6 +112,7 @@ PCbuild/win32/
 /coverage/
 /htmlcov/
 Tools/msi/obj
+Tools/msi/out
 Tools/ssl/amd64
 Tools/ssl/win32
 
