@@ -26,11 +26,3 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build CPython installer
       run: .\Tools\msi\build.bat -x86
-
-  build_win_amd64:
-    name: 'Windows (x64) Installer'
-    runs-on: windows-2019
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build CPython installer
-      run: .\Tools\msi\build.bat -x64
