@@ -49,18 +49,155 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
-#include <netioapi.h>
 
 #if !defined(__Comment_Lib_iphlpapi)
 #define __Comment_Lib_iphlpapi
 #pragma comment(lib, "Iphlpapi.lib")
 #endif
 
+#define IF_MAX_STRING_SIZE 256
+#define NDIS_IF_MAX_STRING_SIZE IF_MAX_STRING_SIZE
+#define IF_NAMESIZE NDIS_IF_MAX_STRING_SIZE
+#define NETIO_STATUS DWORD
+#define NETIOAPI_API_ NTAPI
+#define NETIOAPI_API NETIO_STATUS NETIOAPI_API_
+
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
-#define NDIS_IF_MAX_STRING_SIZE 256
+typedef enum _NDIS_MEDIUM
+{
+    NdisMedium802_3,
+    NdisMedium802_5,
+    NdisMediumFddi,
+    NdisMediumWan,
+    NdisMediumLocalTalk,
+    NdisMediumDix,              // defined for convenience, not a real medium
+    NdisMediumArcnetRaw,
+    NdisMediumArcnet878_2,
+    NdisMediumAtm,
+    NdisMediumWirelessWan,
+    NdisMediumIrda,
+    NdisMediumBpc,
+    NdisMediumCoWan,
+    NdisMedium1394,
+    NdisMediumInfiniBand,
+#if ((NTDDI_VERSION >= NTDDI_VISTA) || NDIS_SUPPORT_NDIS6)
+    NdisMediumTunnel,
+    NdisMediumNative802_11,
+    NdisMediumLoopback,
+#endif // (NTDDI_VERSION >= NTDDI_VISTA)
+
+#if (NTDDI_VERSION >= NTDDI_WIN7)
+    NdisMediumWiMAX,
+    NdisMediumIP,
+#endif
+
+    NdisMediumMax               // Not a real medium, defined as an upper-bound
+} NDIS_MEDIUM, * PNDIS_MEDIUM;
+
+typedef enum _NDIS_PHYSICAL_MEDIUM
+{
+    NdisPhysicalMediumUnspecified,
+    NdisPhysicalMediumWirelessLan,
+    NdisPhysicalMediumCableModem,
+    NdisPhysicalMediumPhoneLine,
+    NdisPhysicalMediumPowerLine,
+    NdisPhysicalMediumDSL,      // includes ADSL and UADSL (G.Lite)
+    NdisPhysicalMediumFibreChannel,
+    NdisPhysicalMedium1394,
+    NdisPhysicalMediumWirelessWan,
+    NdisPhysicalMediumNative802_11,
+    NdisPhysicalMediumBluetooth,
+    NdisPhysicalMediumInfiniband,
+    NdisPhysicalMediumWiMax,
+    NdisPhysicalMediumUWB,
+    NdisPhysicalMedium802_3,
+    NdisPhysicalMedium802_5,
+    NdisPhysicalMediumIrda,
+    NdisPhysicalMediumWiredWAN,
+    NdisPhysicalMediumWiredCoWan,
+    NdisPhysicalMediumOther,
+    NdisPhysicalMediumMax       // Not a real physical type, defined as an upper-bound
+} NDIS_PHYSICAL_MEDIUM, * PNDIS_PHYSICAL_MEDIUM;
+
+typedef struct _MIB_IF_ROW2 {
+    //
+    // Key structure.  Sorted by preference.
+    //
+    NET_LUID InterfaceLuid;
+    NET_IFINDEX InterfaceIndex;
+
+    //
+    // Read-Only fields.
+    //
+    GUID InterfaceGuid;
+    WCHAR Alias[IF_MAX_STRING_SIZE + 1];
+    WCHAR Description[IF_MAX_STRING_SIZE + 1];
+    ULONG PhysicalAddressLength;
+    UCHAR PhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
+    UCHAR PermanentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
+
+    ULONG Mtu;
+    IFTYPE Type;                // Interface Type.
+    TUNNEL_TYPE TunnelType;     // Tunnel Type, if Type = IF_TUNNEL.
+    NDIS_MEDIUM MediaType;
+    NDIS_PHYSICAL_MEDIUM PhysicalMediumType;
+    NET_IF_ACCESS_TYPE AccessType;
+    NET_IF_DIRECTION_TYPE DirectionType;
+    struct {
+        BOOLEAN HardwareInterface : 1;
+        BOOLEAN FilterInterface : 1;
+        BOOLEAN ConnectorPresent : 1;
+        BOOLEAN NotAuthenticated : 1;
+        BOOLEAN NotMediaConnected : 1;
+        BOOLEAN Paused : 1;
+        BOOLEAN LowPower : 1;
+        BOOLEAN EndPointInterface : 1;
+    } InterfaceAndOperStatusFlags;
+
+    IF_OPER_STATUS OperStatus;
+    NET_IF_ADMIN_STATUS AdminStatus;
+    NET_IF_MEDIA_CONNECT_STATE MediaConnectState;
+    NET_IF_NETWORK_GUID NetworkGuid;
+    NET_IF_CONNECTION_TYPE ConnectionType;
+
+    //
+    // Statistics.
+    //
+    ULONG64 TransmitLinkSpeed;
+    ULONG64 ReceiveLinkSpeed;
+
+    ULONG64 InOctets;
+    ULONG64 InUcastPkts;
+    ULONG64 InNUcastPkts;
+    ULONG64 InDiscards;
+    ULONG64 InErrors;
+    ULONG64 InUnknownProtos;
+    ULONG64 InUcastOctets;
+    ULONG64 InMulticastOctets;
+    ULONG64 InBroadcastOctets;
+    ULONG64 OutOctets;
+    ULONG64 OutUcastPkts;
+    ULONG64 OutNUcastPkts;
+    ULONG64 OutDiscards;
+    ULONG64 OutErrors;
+    ULONG64 OutUcastOctets;
+    ULONG64 OutMulticastOctets;
+    ULONG64 OutBroadcastOctets;
+    ULONG64 OutQLen;
+} MIB_IF_ROW2, * PMIB_IF_ROW2;
+
+typedef enum _MIB_IF_TABLE_LEVEL {
+    MibIfTableNormal,
+    MibIfTableRaw
+} MIB_IF_TABLE_LEVEL, * PMIB_IF_TABLE_LEVEL;
+
+typedef struct _MIB_IF_TABLE2 {
+    ULONG NumEntries;
+    MIB_IF_ROW2 Table[ANY_SIZE];
+} MIB_IF_TABLE2, * PMIB_IF_TABLE2;
 
 static unsigned __fastcall CharToHex(_In_ wchar_t _ch)
 {
@@ -437,4 +574,90 @@ char* NETIOAPI_API_ IPHLP_if_indextoname(NET_IFINDEX index, char* name)
     err = WineConvertInterfaceLuidToNameA(&luid, name, IF_MAX_STRING_SIZE);
     if (err) return NULL;
     return name;
+}
+
+static DWORD(CALLBACK* _GetIfTable2Ex)(MIB_IF_TABLE_LEVEL, PMIB_IF_TABLE2*) = NULL;
+static void(CALLBACK* _FreeMibTable)(PVOID) = NULL;
+static IF_INDEX(CALLBACK* _if_nametoindex)(const char*) = NULL;
+static char*(CALLBACK* _if_indextoname)(NET_IFINDEX, char*) = NULL;
+static DWORD(CALLBACK* _ConvertInterfaceLuidToNameW)(const NET_LUID*, WCHAR*, SIZE_T) = NULL;
+
+NETIOAPI_API GetIfTable2Ex(_In_ MIB_IF_TABLE_LEVEL _eLevel, _Outptr_ PMIB_IF_TABLE2* _ppTable2)
+{
+    HMODULE hIPHLPAPI;
+    /* only recheck */
+    if (_GetIfTable2Ex)
+        return _GetIfTable2Ex(_eLevel, _ppTable2);
+
+    hIPHLPAPI = GetModuleHandleW(L"IPHLPAPI.DLL");
+    *(FARPROC*)&_GetIfTable2Ex = GetProcAddress(hIPHLPAPI, "GetIfTable2Ex");
+
+    if (!_GetIfTable2Ex)
+        return GetIfTable2ExDownlevel(_eLevel, _ppTable2);
+    else
+        return _GetIfTable2Ex(_eLevel, _ppTable2);
+}
+
+void NETIOAPI_API_ FreeMibTable(_In_ PVOID _pMemory)
+{
+    HMODULE hIPHLPAPI;
+    /* only recheck */
+    if (_FreeMibTable)
+        _FreeMibTable(_pMemory);
+
+    hIPHLPAPI = GetModuleHandleW(L"IPHLPAPI.DLL");
+    *(FARPROC*)&_FreeMibTable = GetProcAddress(hIPHLPAPI, "FreeMibTable");
+
+    if (!_FreeMibTable)
+        FreeMibTableImpl(_pMemory);
+    else
+        _FreeMibTable(_pMemory);
+}
+
+IF_INDEX NETIOAPI_API_ if_nametoindex(const char* name)
+{
+    HMODULE hIPHLPAPI;
+    /* only recheck */
+    if (_if_nametoindex)
+        return _if_nametoindex(name);
+
+    hIPHLPAPI = GetModuleHandleW(L"IPHLPAPI.DLL");
+    *(FARPROC*)&_if_nametoindex = GetProcAddress(hIPHLPAPI, "if_nametoindex");
+
+    if (!_if_nametoindex)
+        return IPHLP_if_nametoindex(name);
+    else
+        return _if_nametoindex(name);
+}
+
+char* NETIOAPI_API_ if_indextoname(NET_IFINDEX index, char* name)
+{
+    HMODULE hIPHLPAPI;
+    /* only recheck */
+    if (_if_indextoname)
+        return _if_indextoname(index, name);
+
+    hIPHLPAPI = GetModuleHandleW(L"IPHLPAPI.DLL");
+    *(FARPROC*)&_if_indextoname = GetProcAddress(hIPHLPAPI, "if_indextoname");
+
+    if (!_if_indextoname)
+        return IPHLP_if_indextoname(index, name);
+    else
+        return _if_indextoname(index, name);
+}
+
+DWORD NETIOAPI_API_ ConvertInterfaceLuidToNameW(const NET_LUID* luid, WCHAR* name, SIZE_T len)
+{
+    HMODULE hIPHLPAPI;
+    /* only recheck */
+    if (_ConvertInterfaceLuidToNameW)
+        return _ConvertInterfaceLuidToNameW(luid, name, len);
+
+    hIPHLPAPI = GetModuleHandleW(L"IPHLPAPI.DLL");
+    *(FARPROC*)&_ConvertInterfaceLuidToNameW = GetProcAddress(hIPHLPAPI, "ConvertInterfaceLuidToNameW");
+
+    if (!_ConvertInterfaceLuidToNameW)
+        return WineConvertInterfaceLuidToNameW(luid, name, len);
+    else
+        return _ConvertInterfaceLuidToNameW(luid, name, len);
 }

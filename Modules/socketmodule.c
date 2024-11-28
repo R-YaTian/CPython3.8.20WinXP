@@ -6703,7 +6703,7 @@ socket_if_nameindex(PyObject *self, PyObject *arg)
 #ifdef MS_WINDOWS
     PMIB_IF_TABLE2 tbl;
     int ret;
-    ret = IsWindowsVistaOrGreater() ? GetIfTable2Ex(MibIfTableRaw, &tbl) : GetIfTable2ExDownlevel(MibIfTableRaw, &tbl);
+    ret = GetIfTable2Ex(MibIfTableRaw, &tbl);
     if (ret != NO_ERROR) {
         Py_DECREF(list);
         // ret is used instead of GetLastError()
@@ -6712,14 +6712,10 @@ socket_if_nameindex(PyObject *self, PyObject *arg)
     for (ULONG i = 0; i < tbl->NumEntries; ++i) {
         MIB_IF_ROW2 r = tbl->Table[i];
         WCHAR buf[NDIS_IF_MAX_STRING_SIZE + 1];
-        ret = IsWindowsVistaOrGreater() ? ConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf, Py_ARRAY_LENGTH(buf)) :
-            WineConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf, Py_ARRAY_LENGTH(buf));
+        ret = ConvertInterfaceLuidToNameW(&r.InterfaceLuid, buf, Py_ARRAY_LENGTH(buf));
         if (ret) {
             Py_DECREF(list);
-            if (IsWindowsVistaOrGreater())
-                FreeMibTable(tbl);
-            else
-                FreeMibTableImpl(tbl);
+            FreeMibTable(tbl);
             // ret is used instead of GetLastError()
             return PyErr_SetFromWindowsErr(ret);
         }
@@ -6797,11 +6793,7 @@ socket_if_nametoindex(PyObject *self, PyObject *args)
                           PyUnicode_FSConverter, &oname))
         return NULL;
 
-#ifdef MS_WINDOWS
-    index = IsWindowsVistaOrGreater() ? if_nametoindex(PyBytes_AS_STRING(oname)) : IPHLP_if_nametoindex(PyBytes_AS_STRING(oname));
-#else
     index = if_nametoindex(PyBytes_AS_STRING(oname));
-#endif
     Py_DECREF(oname);
     if (index == 0) {
         /* if_nametoindex() doesn't set errno */
@@ -6837,20 +6829,10 @@ socket_if_indextoname(PyObject *self, PyObject *arg)
     }
 
     char name[IF_NAMESIZE + 1];
-#ifdef MS_WINDOWS
-    if (IsWindowsVistaOrGreater() && if_indextoname(index, name) == NULL) {
-        PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
-    } else if (IPHLP_if_indextoname(index, name) == NULL) {
-        PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
-    }
-#else
     if (if_indextoname(index, name) == NULL) {
         PyErr_SetFromErrno(PyExc_OSError);
         return NULL;
     }
-#endif
 
     return PyUnicode_DecodeFSDefault(name);
 }

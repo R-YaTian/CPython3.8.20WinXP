@@ -529,10 +529,22 @@ else:  # use native Windows method on Windows
             return _abspath_fallback(path)
 
 try:
-    from nt import _getfinalpathname, readlink as _nt_readlink
-except ImportError:
+    # GetFinalPathNameByHandle is available starting with Windows 6.0.
+    # Windows XP and non-Windows OS'es will mock _getfinalpathname.
+    from nt import readlink as _nt_readlink
+    if sys.getwindowsversion()[:2] >= (6, 0):
+        from nt import _getfinalpathname
+    else:
+        raise ImportError
+except (AttributeError, ImportError):
     # realpath is a no-op on systems without _getfinalpathname support.
     realpath = abspath
+    # On Windows XP and earlier, two files are the same if their absolute
+    # pathnames are the same.
+    # Non-Windows operating systems fake this method with an XP
+    # approximation.
+    def _getfinalpathname(f):
+        return normcase(abspath(f))
 else:
     def _readlink_deep(path):
         # These error codes indicate that we should stop reading links and
