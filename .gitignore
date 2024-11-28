@@ -34,6 +34,7 @@ gmon.out
 .mypy_cache/
 
 *.exe
+!externals/tcltk-8.6.9.0/win32/bin/*.exe
 !Lib/distutils/command/*.exe
 
 # Ignore core dumps... but not Tools/msi/core/ or the like.

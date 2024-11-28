@@ -531,6 +531,9 @@
     <Warning Text="A copy of vcruntime140.dll is also required" Condition="!$(VCToolsRedistVersion.StartsWith(`14.`))" />
     <Copy SourceFiles="%(VCRuntimeDLL.FullPath)" DestinationFolder="$(OutDir)" />
   </Target>
+  <Target Name="_CopyUcrtbased" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
+    <Copy SourceFiles="$(ExternalsDir)windows-installer\redist-1\x86\ucrtbased.dll" DestinationFolder="$(OutDir)" />
+  </Target>
   <Target Name="_CleanVCRuntime" AfterTargets="Clean">
     <Delete Files="@(VCRuntimeDLL->'$(OutDir)%(Filename)%(Extension)')" />
   </Target>

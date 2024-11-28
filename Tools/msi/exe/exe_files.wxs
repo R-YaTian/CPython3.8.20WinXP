@@ -65,6 +65,12 @@
             <Component Id="pythonw_d.pdb" Directory="InstallDirectory" Guid="*">
                 <File Name="pythonw_d.pdb" />
             </Component>
+            <Component Id="vcruntime140d.dll" Directory="InstallDirectory" Guid="*">
+                <File Name="vcruntime140d.dll" Source="!(bindpath.redist)vcruntime140d.dll" KeyPath="yes" />
+            </Component>
+            <Component Id="ucrtbased.dll" Directory="InstallDirectory" Guid="*">
+                <File Name="ucrtbased.dll" Source="!(bindpath.redist)ucrtbased.dll" KeyPath="yes" />
+            </Component>
         </ComponentGroup>
     </Fragment>
     
