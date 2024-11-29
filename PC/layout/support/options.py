@@ -21,19 +21,19 @@ OPTIONS = {
     "distutils": {"help": "distutils"},
     "tcltk": {"help": "Tcl, Tk and tkinter"},
     "idle": {"help": "Idle"},
-    "tests": {"help": "test suite"},
+    "tests": {"help": "test suite", "not-in-all": True},
     "tools": {"help": "tools"},
     "venv": {"help": "venv"},
     "dev": {"help": "headers and libs"},
-    "symbols": {"help": "symbols"},
+    "symbols": {"help": "symbols", "not-in-all": True},
     "bdist-wininst": {"help": "bdist_wininst support"},
     "underpth": {"help": "a python._pth file", "not-in-all": True},
     "launchers": {"help": "specific launchers"},
     "appxmanifest": {"help": "an appxmanifest"},
     "props": {"help": "a python.props file"},
     "nuspec": {"help": "a python.nuspec file"},
-    "chm": {"help": "the CHM documentation"},
-    "html-doc": {"help": "the HTML documentation"},
+    "chm": {"help": "the CHM documentation", "not-in-all": True},
+    "html-doc": {"help": "the HTML documentation", "not-in-all": True},
 }
 
 
