@@ -89,7 +89,7 @@ Select Customize to review current options.</String>
   <String Id="ShortInstallLauncherAllUsersLabel">Install &amp;launcher for all users (recommended)</String>
   <String Id="PrecompileLabel">&amp;Precompile standard library</String>
   <String Id="Include_symbolsLabel">Install debugging &amp;symbols</String>
-  <String Id="Include_debugLabel">Install debu&amp;g binaries (requires VS 2015 or later)</String>
+  <String Id="Include_debugLabel">Install debu&amp;g binaries</String>
   
   <String Id="ProgressHeader">[ActionLikeInstallation] Progress</String>
   <String Id="ProgressLabel">[ActionLikeInstalling]:</String>
