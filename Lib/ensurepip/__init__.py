@@ -9,7 +9,7 @@ import subprocess
 
 __all__ = ["version", "bootstrap"]
 _PACKAGE_NAMES = ('setuptools', 'pip')
-_SETUPTOOLS_VERSION = "75.2.0"
+_SETUPTOOLS_VERSION = "75.3.0"
 _PIP_VERSION = "24.3.1"
 _PROJECTS = [
     ("setuptools", _SETUPTOOLS_VERSION, "py3"),
